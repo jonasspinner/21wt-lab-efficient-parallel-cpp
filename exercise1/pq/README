@@ -1,0 +1,22 @@
+To compile this project:
+1. install the gtest library
+   e.g. sudo apt-get install libgtest-dev
+2. if you used a non-standard install path, you
+   have to enter the path into the CMakeLists.txt
+   file
+3. do the following in your commandline
+
+mkdir build
+cd build
+cmake ..
+make
+
+This will create the following files:
+
+pq_std - std::priority_queue
+pq_a   - solution of task a
+pq_b   - solution of task b
+pq_c   - solution of task c
+pq_test - this test checks for the correctness of your implementation
+
+You can use (e.g.) "make pq_a" instead to recompile a single file only.

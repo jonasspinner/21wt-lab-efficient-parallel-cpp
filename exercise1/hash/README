@@ -1,0 +1,20 @@
+To compile this project, do the following in your commandline:
+
+mkdir build
+cd build
+cmake ..
+make
+
+This will create the following files:
+
+hash_std      - std::unordered map
+hash_original - unchanged baseline solution
+hash_a        - solution of task a
+hash_b        - solution of task b
+
+You can use (e.g.) "make hash_a" instead to recompile a single file only.
+
+To try the evaluation script:
+1. first execute all executables you just created at least once
+2. execute the r script (eval/make_plots.R) for example
+   e.g. by entering "Rscript make_plots.R" into a command line

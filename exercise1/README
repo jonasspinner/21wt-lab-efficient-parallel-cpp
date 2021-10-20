@@ -1,0 +1,41 @@
+FAQs
+
+1.1:
+ - Q: When do I know that I am done?
+ - A: Check the handout, look through all the headlines -- could there
+   be an occurence of this problem in our code?  We did not include
+   all possible problems.  You also have to ask yourself, if you can
+   actually change the problem (some problems might be inherent to the
+   hash table)?
+
+
+ - Q: What can I do in task b) to get an improvement over task a)?
+ - A: Think about what you can change, that you were not able to in
+   task a).  Some of the functions we want you to look at are =map=,
+   =init=, and =deinit=.  Also look at the member variables, and see
+   if any additional members might be beneficial, or how you can
+   change the addressing of the current members.
+
+   You can also look at 1.2.  What do we optimize in task 1.2 b) and
+   c) does it make sense to do something similar in task 1.1 b).
+
+
+ - Q: Can I change the interface to achieve better speedups?
+ - A: Our sample solution does not change the interface.  If you found
+   any successful optimizations, that did not allow you to keep the
+   interface then you can submit those.  But be prepared, to answer
+   some questions about your optimization, like "why is the original
+   interface not possible?", "what was the problem that your
+   optimization combat?".
+
+   Your implementation should not force any changes in the test file!
+
+
+ - Q: Can I change the CellIterator class or its functionality?
+ - A: No you cannot!  You can however use your own seperate iterator
+   (at least for task b). If you do this, you should make sure it has
+   the exact same interface, as the old iterator otherwise you run
+   into the same problems as the previous question.  If you change the
+   iterator type, you have to change some things in the later part of
+   the HashB class (at least the typedefs for iterator and
+   const_iterator, and the makeIterator functions).
