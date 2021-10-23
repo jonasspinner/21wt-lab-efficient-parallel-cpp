@@ -1,3 +1,6 @@
 */build/*
 *.graph
 *.zip
+**/.idea
+**/cmake-build-*
+**/build
