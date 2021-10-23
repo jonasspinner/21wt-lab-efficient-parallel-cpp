@@ -33,7 +33,7 @@ public:
         size_t hash_pos = map(p.first);
         for (size_t i = hash_pos; i < hash_pos + 400; ++i) {
             size_t cur_pos = i % capacity();
-            CellType cur_element = table[cur_pos];
+            const auto &cur_element = table[cur_pos];
 
             if (cur_element.compareKey(p.first)) {
                 return makeInsertRet(cur_pos, false);
@@ -52,7 +52,7 @@ private:
 
         for (size_t i = hash_pos; i < hash_pos + 400; ++i) {
             size_t cur_pos = i % capacity();
-            CellType cur_element = table[cur_pos];
+            const auto &cur_element = table[cur_pos];
 
             if (cur_element.compareKey(k)) {
                 return cur_pos;
