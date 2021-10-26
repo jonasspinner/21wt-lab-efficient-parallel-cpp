@@ -1,0 +1,15 @@
+There were two errors in our original ./pq/tests/correctness.cpp:
+ - CanInsertAfterPop-test did insert more than capacity elements
+ - The OPTIONAL_OnlyMoves test for the addressable priority queue
+   expected an empty table
+
+Copy Free change_key
+ - the OPTIONAL_OnlyMoves test for the addressable priority queue
+   cannot be successful without changing the interface of change_key
+   function. If you want to implement a change_key that supports copy
+   avoidance then change the change_key function, to receive the new
+   key by value (hence being able to move the initial input).
+
+Also a small update to the pdf:
+ - mostly because we changed the interface of the priority queue, to
+   allow for copy-free push without using an emplace function.

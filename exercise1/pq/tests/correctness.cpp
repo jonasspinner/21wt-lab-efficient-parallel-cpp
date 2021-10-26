@@ -130,12 +130,12 @@ TYPED_TEST(PriorityQueueTest, CanInsertAfterPop) {
     }
     ASSERT_EQ(q.size(), n/2);
 
-    for (auto i = 0ul; i < n; ++i) {
+    for (auto i = 0ul; i < n/2; ++i) {
         q.push(2*n+i);
     }
-    ASSERT_EQ(q.size(), n + n/2);
+    ASSERT_EQ(q.size(), n);
 
-    for (auto i = n; i > 0; --i) {
+    for (auto i = n/2; i > 0; --i) {
         ASSERT_EQ(q.top(), static_cast<int>(2*n-1+i));
         q.pop();
     }
@@ -385,7 +385,6 @@ TEST(AddressablePriorityQueueTest, OPTIONAL_OnlyMoves) {
             q.change_key(handles[i], std::move(values[i]));
         EXPECT_EQ(ElementMock::copies, 0);
         EXPECT_EQ(ElementMock::default_constructions, 0);
-        EXPECT_TRUE(q.empty());
 
         for (auto&& v : values_copy) {
             ASSERT_EQ(q.top(), v);
