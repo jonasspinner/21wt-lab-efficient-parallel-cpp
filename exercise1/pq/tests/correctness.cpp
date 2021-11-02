@@ -393,5 +393,6 @@ TEST(AddressablePriorityQueueTest, OPTIONAL_OnlyMoves) {
         EXPECT_EQ(ElementMock::copies, 0);
         EXPECT_EQ(ElementMock::default_constructions, 0);
         EXPECT_TRUE(q.empty());
+        handles.clear();
     }
 }
