@@ -1,0 +1,17 @@
+FAQs
+
+Q: Are the graphs directed?
+A: Yes.
+
+Q: Can I assume node IDs will always be in [0, num_nodes)?
+A: Yes.
+
+Q: What should I do in the beginEdges/endEdges functions?
+A: The goal behind these functions is to provide a consistent
+   interface for all implementations.
+   The intended use is like this:
+
+   for (auto it = graph.beginEdges(node); it != graph.endEdges(node); ++it) {
+       const auto neighbour = graph.edgeHead(it);
+       // ...
+   }
