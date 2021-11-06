@@ -3,20 +3,24 @@
 #include <queue>
 #include <utility>
 #include <cassert>
+#include <algorithm>
+
+#include "AlignedVector.h"
 
 template<class T, class Comp = std::less<T> >
 class PriQueueA {
 public:
-    PriQueueA(std::size_t capacity, std::size_t degree = 8) : m_degree(degree) { m_elements.reserve(capacity); }
+    explicit PriQueueA(std::size_t capacity, std::size_t degree = 8)
+            : m_elements(capacity, degree, degree - 1), m_degree(degree) {}
 
     const T &top() const {
         assert(!empty());
         return m_elements.front();
     }
 
-    bool empty() const { return m_elements.empty(); }
+    [[nodiscard]] bool empty() const { return m_elements.empty(); }
 
-    std::size_t size() const { return m_elements.size(); }
+    [[nodiscard]] std::size_t size() const { return m_elements.size(); }
 
     void push(T value) {
         m_elements.push_back(value);
@@ -88,7 +92,7 @@ private:
     }
 
     /* member definitions *****************************************************/
-    std::vector<T> m_elements;
-    size_t m_degree;
-    Comp m_comp;
+    AlignedVector<T> m_elements;
+    const size_t m_degree;
+    const Comp m_comp{};
 };
