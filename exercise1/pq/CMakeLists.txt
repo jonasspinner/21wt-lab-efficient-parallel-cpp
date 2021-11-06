@@ -21,9 +21,9 @@ endforeach()
 
 #### TESTS #####################################################################
 
-set(GTEST_ROOT /usr/src/googletest)
+set(GTEST_ROOT_HINTS "/usr/src/googletest ./googletest")
 
-find_path(GTEST_ROOT googletest/CMakeLists.txt HINTS ${GTEST_ROOT})
+find_path(GTEST_ROOT googletest/CMakeLists.txt HINTS ${GTEST_ROOT_HINTS})
 
 if (NOT ${GTEST_ROOT} STREQUAL GTEST_ROOT-NOTFOUND)
     enable_testing()
