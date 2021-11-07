@@ -3,6 +3,7 @@
 #include <queue>
 #include <utility>
 #include <cassert>
+#include <algorithm>
 
 #include "AlignedVector.h"
 
@@ -57,20 +58,39 @@ private:
     void fix_downwards(std::size_t i) {
         assert(i < size());
 
+        auto* const elements = m_elements.data();
+
         while (true) {
             assert(i < size());
 
-            size_t max_idx = i;
-            for (size_t k = child(i, 0); k < std::min(child(i, degree - 1) + 1, size()); ++k) {
-                if (m_comp(m_elements[max_idx], m_elements[k])) {
-                    max_idx = k;
-                }
-            }
-            if (i == max_idx)
-                break;
-            std::swap(m_elements[i], m_elements[max_idx]);
+            auto* max_ptr = elements + i;
 
-            i = max_idx;
+            auto* const begin = elements + child(i, 0);
+            if (begin + degree <= elements + size()) {
+                for (auto* k = begin; k < begin + degree; ++k) {
+                    if (m_comp(*max_ptr, *k)) {
+                        max_ptr = k;
+                    }
+                }
+            } else {
+                break;
+            }
+
+            if (max_ptr == elements + i) {
+                return;
+            }
+            std::swap(elements[i], *max_ptr);
+
+            i = static_cast<size_t>(std::distance(elements, max_ptr));
+        }
+
+        auto* const begin = elements + child(i, 0);
+        auto* const end = std::min(begin + degree, elements + size());
+        if (begin < end) {
+            auto* max_ptr = std::max_element(begin, end, m_comp);
+            if (m_comp(elements[i], *max_ptr)) {
+                std::swap(elements[i], *max_ptr);
+            }
         }
     }
 
