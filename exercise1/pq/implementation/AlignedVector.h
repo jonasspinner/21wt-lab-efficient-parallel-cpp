@@ -8,10 +8,10 @@ public:
         assert(block_size != 0);
         assert(offset < block_size);
         if (throw_exceptions && block_size == 0) {
-            throw std::invalid_argument("");
+            throw std::invalid_argument("block_size is 0");
         }
         if (throw_exceptions && offset >= block_size) {
-            throw std::invalid_argument("");
+            throw std::invalid_argument("offset must be less than block_size");
         }
         if (capacity > 0) {
             m_alloc_ptr = static_cast<T *>(std::aligned_alloc(alignof(T) * block_size,
@@ -32,6 +32,9 @@ public:
     AlignedVector &operator=(AlignedVector &&other) = delete;
 
     ~AlignedVector() {
+        while (!empty()) {
+            pop_back();
+        }
         free(m_alloc_ptr);
         m_alloc_ptr = nullptr;
         m_elements = nullptr;
@@ -47,6 +50,10 @@ public:
         return m_size;
     }
 
+    [[nodiscard]] constexpr std::size_t capacity() const {
+        return m_capacity;
+    }
+
     T &operator[](std::size_t index) {
         assert(index < m_size);
         return m_elements[index];
@@ -60,17 +67,19 @@ public:
     void push_back(const T &value) {
         assert(m_size < m_capacity);
         if (throw_exceptions && m_size >= m_capacity) {
-            throw std::length_error("");
+            throw std::length_error("reached capacity");
         }
-        m_elements[m_size++] = value;
+        new(m_elements + m_size) T(value);
+        m_size++;
     }
 
     void push_back(T &&value) {
         assert(m_size < m_capacity);
         if (throw_exceptions && m_size >= m_capacity) {
-            throw std::length_error("");
+            throw std::length_error("reached capacity");
         }
-        m_elements[m_size++] = std::move(value);
+        new(m_elements + m_size) T(std::move(value));
+        m_size++;
     }
 
     void pop_back() {

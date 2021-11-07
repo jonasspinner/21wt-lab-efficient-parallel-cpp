@@ -21,16 +21,16 @@ public:
     [[nodiscard]] std::size_t size() const { return m_elements.size(); }
 
     void push(T value) {
-        m_elements.push_back(value);
+        m_elements.push_back(std::move(value));
 
         size_t i = size() - 1;
         while (i > 0) {
             auto p = parent(i);
-            if (m_comp(m_elements[i], m_elements[p])) {
+            if (!m_comp(m_elements[p], m_elements[i])) {
                 break;
             } else {
                 std::swap(m_elements[p], m_elements[i]);
-                assert(m_comp(m_elements[i], m_elements[parent(i)]));
+                assert(!m_comp(m_elements[p], m_elements[i]));
                 i = p;
             }
         }
@@ -74,7 +74,7 @@ private:
 
     [[nodiscard]] bool is_valid() const {
         for (size_t i = 1; i < size(); ++i) {
-            if (!m_comp(m_elements[i], m_elements[parent(i)])) {
+            if (m_comp(m_elements[parent(i)], m_elements[i])) {
                 return false;
             }
         }
