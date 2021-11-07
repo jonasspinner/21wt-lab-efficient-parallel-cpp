@@ -56,6 +56,24 @@ size_t log(size_t deg)
 #define OUTPUT "pq_c.txt"
 #endif
 
+/* DEFINITIONS FOR SUBTASK D **************************************************/
+#ifdef PQ_D
+#include "implementation/pq_d.h"
+size_t log(size_t deg)
+{
+    size_t res  = 0;
+    size_t temp = 1;
+    while (temp < deg) { temp <<= 1; res++; }
+    std::cout << std::endl << res << std::endl;
+    return res;
+}
+#define PQ_TYPE PriQueueD
+#define CALL_TEST(testfunction, it, n, deg, sec) \
+    testfunction<PQ_TYPE<size_t> >(it,n,deg,sec)
+#define PQ_CONSTR(n,deg) n, log(deg)
+#define OUTPUT "pq_d.txt"
+#endif
+
 /* DEFINITIONS FOR THE STD BASELINE IMPLEMENTATION ****************************/
 #ifdef PQ_STD
 #include <queue>

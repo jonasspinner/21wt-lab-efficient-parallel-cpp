@@ -11,7 +11,7 @@ set (CMAKE_CXX_FLAGS "-Wall -Wextra -pedantic -g -O3 -march=native")
 
 #### HASH TABLES ###############################################################
 
-set(PQ_LIST "pq_std;pq_a;pq_b;pq_c")
+set(PQ_LIST "pq_std;pq_a;pq_b;pq_c;pq_d")
 
 foreach(pq ${PQ_LIST})
   string(TOUPPER ${pq} pq_uc)
