@@ -24,10 +24,14 @@ public:
 
     void push(T value) {
         m_elements.push_back(std::move(value));
+        fix_upwards(size() - 1);
+    }
 
-        size_t i = size() - 1;
+private:
+    void fix_upwards(std::size_t i) {
+        assert(i < size());
         while (i > 0) {
-            auto p = parent(i);
+            const auto p = parent(i);
             if (!m_comp(m_elements[p], m_elements[i])) {
                 break;
             } else {
@@ -38,6 +42,7 @@ public:
         }
     }
 
+public:
     void pop() {
         assert(!empty());
 
@@ -47,7 +52,13 @@ public:
         if (size() == 0)
             return;
 
-        size_t i = 0;
+        fix_downwards(0);
+    }
+
+private:
+    void fix_downwards(std::size_t i) {
+        assert(i < size());
+
         while (true) {
             assert(i < size());
 

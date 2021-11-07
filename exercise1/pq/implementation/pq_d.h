@@ -35,9 +35,16 @@ public:
 
         assert(pos(m_elements[size() - 1].h) == size() - 1);
 
-        size_t i = size() - 1;
+        fix_upwards(size() - 1);
+
+        return h;
+    }
+
+private:
+    void fix_upwards(std::size_t i) {
+        assert(i < size());
         while (i > 0) {
-            auto p = parent(i);
+            const auto p = parent(i);
             if (!m_comp(m_elements[p].e, m_elements[i].e)) {
                 break;
             } else {
@@ -50,13 +57,10 @@ public:
                 i = p;
             }
         }
-
-        return h;
     }
 
+public:
     void pop() {
-        auto const degree = static_cast<size_t>(1) << m_log_degree;
-
         assert(!empty());
 
         pos(m_elements[0].h) = std::numeric_limits<std::size_t>::max();
@@ -68,7 +72,14 @@ public:
         if (size() == 0)
             return;
 
-        size_t i = 0;
+        fix_downwards(0);
+    }
+
+private:
+    void fix_downwards(std::size_t i) {
+        assert(i < size());
+        auto const degree = static_cast<size_t>(1) << m_log_degree;
+
         while (true) {
             assert(i < size());
 
@@ -89,14 +100,21 @@ public:
         }
     }
 
+public:
     const T &get_key(handle h) const {
         return m_elements[pos(h)].e;
     }
 
     // implement a log(n) key change function
     void change_key(handle h, T newvalue) {
-        //assert(!m_comp(get_key(h), newvalue));
-        /* ----- TODO ----- */
+        const auto i = pos(h);
+        if (m_comp(m_elements[i].e, newvalue)) {
+            m_elements[i].e = std::move(newvalue);
+            fix_upwards(i);
+        } else {
+            m_elements[i].e = std::move(newvalue);
+            fix_downwards(i);
+        }
     }
 
 private:
