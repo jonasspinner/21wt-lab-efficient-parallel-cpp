@@ -21,10 +21,12 @@ public:
     explicit PriQueueD(std::size_t capacity, std::size_t log_degree = 3)
             : m_log_degree(log_degree) {
         m_elements.reserve(capacity);
+        m_positions.reserve(capacity);
     }
 #else
     explicit PriQueueD(std::size_t capacity, std::size_t log_degree = 3)
             : m_elements(capacity, static_cast<size_t>(1) << log_degree, (static_cast<size_t>(1) << log_degree) - 1),
+              m_positions(capacity, static_cast<size_t>(1) << log_degree, (static_cast<size_t>(1) << log_degree) - 1),
               m_log_degree(log_degree) {}
 #endif
 
@@ -157,10 +159,11 @@ private:
     /* member definitions *****************************************************/
 #ifdef USE_STD_VECTOR
     std::vector<Element> m_elements;
+    std::vector<std::size_t> m_positions;
 #else
     AlignedVector<Element> m_elements;
+    AlignedVector<std::size_t> m_positions;
 #endif
-    std::vector<std::size_t> m_positions;
     std::size_t m_log_degree;
     Comp m_comp{};
     // T* or std::vector<T>
