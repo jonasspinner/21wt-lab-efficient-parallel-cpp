@@ -10,8 +10,15 @@
 template<class T, class Comp = std::less<T> >
 class PriQueueA {
 public:
+#ifdef USE_STD_VECTOR
+    explicit PriQueueA(std::size_t capacity, std::size_t degree = 8)
+            : m_degree(degree) {
+        m_elements.reserve(capacity);
+    }
+#else
     explicit PriQueueA(std::size_t capacity, std::size_t degree = 8)
             : m_elements(capacity, degree, degree - 1), m_degree(degree) {}
+#endif
 
     const T &top() const {
         assert(!empty());
@@ -103,7 +110,11 @@ private:
     }
 
     /* member definitions *****************************************************/
+#ifdef USE_STD_VECTOR
+    std::vector<T> m_elements;
+#else
     AlignedVector<T> m_elements;
+#endif
     const size_t m_degree;
     const Comp m_comp{};
 };

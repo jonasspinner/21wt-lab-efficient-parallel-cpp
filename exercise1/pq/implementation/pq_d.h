@@ -17,9 +17,16 @@ private:
         handle h;
     };
 public:
+#ifdef USE_STD_VECTOR
+    explicit PriQueueD(std::size_t capacity, std::size_t log_degree = 3)
+            : m_log_degree(log_degree) {
+        m_elements.reserve(capacity);
+    }
+#else
     explicit PriQueueD(std::size_t capacity, std::size_t log_degree = 3)
             : m_elements(capacity, static_cast<size_t>(1) << log_degree, (static_cast<size_t>(1) << log_degree) - 1),
               m_log_degree(log_degree) {}
+#endif
 
     const T &top() const {
         assert(!empty());
@@ -148,7 +155,11 @@ private:
 
 private:
     /* member definitions *****************************************************/
+#ifdef USE_STD_VECTOR
+    std::vector<Element> m_elements;
+#else
     AlignedVector<Element> m_elements;
+#endif
     std::vector<std::size_t> m_positions;
     std::size_t m_log_degree;
     Comp m_comp{};
