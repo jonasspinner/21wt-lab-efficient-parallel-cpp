@@ -16,6 +16,10 @@ public:
     Cell(Cell&& rhs)                 = default;
     Cell& operator=(Cell&& rhs)      = default;
 
+#ifdef HASH_B
+    explicit Cell(std::pair<K, D> &&p) : pair(std::move(p)) {}
+#endif
+
     ~Cell() = default;
 
     bool isEmpty() const
