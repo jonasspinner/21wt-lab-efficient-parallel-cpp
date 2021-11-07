@@ -4,7 +4,7 @@ library(tidyverse)
 # Path to the result files
 res_folder='./'
 # Different versions of the algorithm we want to plot
-algos = c('std', 'original', 'a', 'b')
+algos = c('std', 'original', 'a', 'b', 'c')
 
 # Reads the files and creates the union of all rows
 data <- algos %>% map(function(a) {

@@ -31,6 +31,13 @@
 #define OUTPUT   "hash_b.txt"
 #endif
 
+#ifdef HASH_C
+#define USE_STD_VECTOR
+#include "implementation/hash_b.h"
+#define HASHTYPE HashB
+#define OUTPUT   "hash_c.txt"
+#endif
+
 namespace test_time
 {
     template <class T>

@@ -14,7 +14,7 @@ set (CMAKE_CXX_FLAGS "-std=c++14 -msse4.2 -Wall -Wextra -O3 -g")
 
 #### HASH TABLES ###############################################################
 
-set(HASH_LIST "hash_std;hash_original;hash_a;hash_b")
+set(HASH_LIST "hash_std;hash_original;hash_a;hash_b;hash_c")
 
 foreach(h ${HASH_LIST})
   string(TOUPPER ${h} h_uc)

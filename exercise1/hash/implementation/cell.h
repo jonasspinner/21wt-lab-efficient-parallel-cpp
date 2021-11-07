@@ -19,6 +19,9 @@ public:
 #ifdef HASH_B
     explicit Cell(std::pair<K, D> &&p) : pair(std::move(p)) {}
 #endif
+#ifdef HASH_C
+    explicit Cell(std::pair<K, D> &&p) : pair(std::move(p)) {}
+#endif
 
     ~Cell() = default;
 
