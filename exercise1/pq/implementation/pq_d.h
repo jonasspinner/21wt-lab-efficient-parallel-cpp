@@ -3,6 +3,8 @@
 #include <queue>
 #include <utility>
 
+#include "AlignedVector.h"
+
 template<class T, class Comp = std::less<T> >
 class PriQueueD {
 public:

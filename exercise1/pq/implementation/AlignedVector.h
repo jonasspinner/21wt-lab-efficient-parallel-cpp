@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cassert>
+
 template<class T, bool throw_exceptions = false>
 class AlignedVector {
 public:
