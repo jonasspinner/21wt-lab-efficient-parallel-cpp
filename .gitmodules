@@ -1,3 +1,0 @@
-[submodule "exercise1/pq/googletest"]
-	path = exercise1/pq/googletest
-	url = https://github.com/google/googletest.git

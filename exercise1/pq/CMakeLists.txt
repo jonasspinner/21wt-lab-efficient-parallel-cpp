@@ -21,7 +21,7 @@ endforeach()
 
 #### TESTS #####################################################################
 
-set(GTEST_ROOT_HINTS "/usr/src/googletest ./googletest")
+set(GTEST_ROOT_HINTS "/usr/src/googletest")
 
 find_path(GTEST_ROOT googletest/CMakeLists.txt HINTS ${GTEST_ROOT_HINTS})
 
