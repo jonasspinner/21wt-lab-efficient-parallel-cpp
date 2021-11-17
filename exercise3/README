@@ -1,0 +1,35 @@
+To build:
+
+makedir build
+cd build
+cmake ..
+make
+
+To generate data (for the correctness test) unpack the included zip
+file (it should create the data/folder).  Afterwards, the data folder
+contains two graphs and two datasets that you can use to test the
+correctness of your solution. Use build/test_correctness to test the
+correctness of your solution.  For your experimental evaluation
+(performance tests) you may/should also test your solution on other
+graphs generated with our graph generator.
+
+DO NOT UPLOAD THESE DATA SETS INTO YOUR GIT REPOSITORY
+(SCC has previously called us about our overblown data usage)
+
+To generate additional graphs (for your tests) compile the
+graph_construction target and run the resulting executable
+the necessary parameters are:
+
+build/graph_construction  <#components> <#nodes avg_degree> [#nodes avg_degree...]
+
+Where <#components> is an integer (number of components). For each
+component there should be a pair of <#nodes> which is the number of
+nodes in the component (integer) and <avg_degree> (float>1) which is
+the average degree of nodes in the component. Different components of
+the resulting graph are loosely connected. Do not generate components
+with "very" large average degrees.
+
+../build/graph_construction 6 100 2 100 1.2 100 2.5 100 1 100 2 100 2.8 >> test_graph1.graph
+
+generates a graph with 6 components, each of which has 100 nodes with
+varying average degrees (between 1 and 3).
