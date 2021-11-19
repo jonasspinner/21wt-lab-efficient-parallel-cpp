@@ -6,7 +6,8 @@ cmake_minimum_required (VERSION 2.8)
 
 include_directories(.)
 
-set (CMAKE_CXX_FLAGS "-std=c++2a -msse4.2 -Wall -Wextra -O3 -g")
+# set (CMAKE_CXX_FLAGS "-std=c++2a -msse4.2 -Wall -Wextra -O3 -g")
+set (CMAKE_CXX_FLAGS "-std=c++2a -Wall -Wextra")
 
 #### TARGETS ###################################################################
 
@@ -33,3 +34,5 @@ if (NOT ${GTEST_ROOT} STREQUAL GTEST_ROOT-NOTFOUND)
     include(GoogleTest)
     gtest_discover_tests(graph_test)
 endif()
+
+add_executable(benchmark tests/benchmark.cpp)
