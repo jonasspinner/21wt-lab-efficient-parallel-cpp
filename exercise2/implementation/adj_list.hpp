@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <vector>
+#include <numeric>
+#include <cstdint>
 
 #include "edge_list.hpp"
 
@@ -16,26 +18,50 @@
 // But if you want to implement an iterator you can find a blueprint in exc1
 
 
-class AdjacencyList {
+template<class Index = uint64_t>
+class AdjacencyListT {
  public:
-    using NodeHandle = /* TODO */;
-    using EdgeIterator = /* TODO */;
+    using NodeHandle = Index;
+    using EdgeIterator = typename std::vector<NodeHandle>::const_iterator;
 
-    AdjacencyList() = default;
-    AdjacencyList(std::size_t num_nodes, const EdgeList& edges);
+    explicit AdjacencyListT(std::size_t num_nodes = 0, const EdgeList& edges = {}) : edges_(num_nodes) {
+        if (num_nodes > static_cast<std::size_t>(std::numeric_limits<Index>::max())) {
+            throw std::runtime_error("NodeIdType too small");
+        }
+        for (const auto &e : edges) {
+            edges_[e.from].push_back(e.to);
+        }
+    }
 
-    std::size_t numNodes() const;
+    [[nodiscard]] std::size_t numNodes() const {
+        return edges_.size();
+    }
 
-    NodeHandle node(std::size_t n) const;
-    std::size_t nodeId(NodeHandle n) const;
+    [[nodiscard]] NodeHandle node(std::size_t n) const {
+        return n;
+    }
 
-    EdgeIterator beginEdges(NodeHandle) const;
-    EdgeIterator endEdges(NodeHandle) const;
+    [[nodiscard]] std::size_t nodeId(NodeHandle n) const {
+        return n;
+    }
 
-    NodeHandle edgeHead(EdgeIterator) const;
-    double edgeWeight(EdgeIterator) const
+    [[nodiscard]] EdgeIterator beginEdges(NodeHandle n) const {
+        return edges_[n].begin();
+    }
+
+    [[nodiscard]] EdgeIterator endEdges(NodeHandle n) const {
+        return edges_[n].end();
+    }
+
+    [[nodiscard]] NodeHandle edgeHead(EdgeIterator e) const {
+        return *e;
+    }
+
+    [[nodiscard]] double edgeWeight(EdgeIterator) const
     { return 1.; /* no weighted implementation */ }
 
  private:
-    std::vector<std::vector</* TODO */>> edges_;
+    std::vector<std::vector<NodeHandle>> edges_;
 };
+
+using AdjacencyList = AdjacencyListT<>;
