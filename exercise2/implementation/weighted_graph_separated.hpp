@@ -1,27 +1,70 @@
 #pragma once
 
 #include <cstddef>
+#include <numeric>
+#include <cstdint>
 
 #include "edge_list.hpp"
 
-class WeightedGraphSeparated {
- public:
-    using NodeHandle = /* TODO */;
-    using EdgeIterator = /* TODO */;
+template<class Index = uint64_t>
+class WeightedGraphSeparatedT {
+public:
+    using NodeHandle = Index;
+    using EdgeIterator = Index;
 
-    WeightedGraphSeparated() = default;
-    WeightedGraphSeparated(std::size_t num_nodes, const EdgeList& edges);
+    explicit WeightedGraphSeparatedT(std::size_t num_nodes = 0, const EdgeList &edges = {})
+            : index_(num_nodes + 1), edges_(edges.size()), weights_(edges.size()) {
+        std::vector<std::size_t> c(num_nodes + 1);
+        for (const auto &e: edges) {
+            c[e.from + 1]++;
+        }
 
-    std::size_t numNodes() const;
+        std::inclusive_scan(c.begin(), c.end(), c.begin());
+        index_ = c;
 
-    NodeHandle node(std::size_t n) const;
-    std::size_t nodeId(NodeHandle n) const;
+        assert(c[0] == 0);
+        assert(c[num_nodes] == edges.size());
 
-    EdgeIterator beginEdges(NodeHandle) const;
-    EdgeIterator endEdges(NodeHandle) const;
+        for (const auto &e: edges) {
+            auto &e_count = c[e.from];
+            edges_[e_count] = e.to;
+            weights_[e_count] = e.length;
+            e_count++;
+        }
+    }
 
-    NodeHandle edgeHead(EdgeIterator) const;
-    double edgeWeight(EdgeIterator) const;
+    [[nodiscard]] std::size_t numNodes() const {
+        return index_.size() - 1;
+    };
 
- private:
+    [[nodiscard]] NodeHandle node(std::size_t n) const {
+        return n;
+    }
+
+    [[nodiscard]] std::size_t nodeId(NodeHandle n) const {
+        return n;
+    }
+
+    [[nodiscard]] EdgeIterator beginEdges(NodeHandle n) const {
+        return index_[nodeId(n)];
+    }
+
+    [[nodiscard]] EdgeIterator endEdges(NodeHandle n) const {
+        return index_[nodeId(n) + 1];
+    }
+
+    [[nodiscard]] NodeHandle edgeHead(EdgeIterator e) const {
+        return edges_[e];
+    }
+
+    [[nodiscard]] double edgeWeight(EdgeIterator e) const {
+        return weights_[e];
+    }
+
+private:
+    std::vector<Index> index_;
+    std::vector<NodeHandle> edges_;
+    std::vector<double> weights_;
 };
+
+using WeightedGraphSeparated = WeightedGraphSeparatedT<>;

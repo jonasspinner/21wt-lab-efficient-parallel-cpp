@@ -1,27 +1,67 @@
 #pragma once
 
 #include <cstddef>
+#include <numeric>
+#include <cstdint>
 
 #include "edge_list.hpp"
 
-class WeightedGraphPaired {
- public:
-    using NodeHandle = /* TODO */;
-    using EdgeIterator = /* TODO */;
 
-    WeightedGraphPaired() = default;
-    WeightedGraphPaired(std::size_t num_nodes, const EdgeList& edges);
+template<class Index = uint64_t>
+class WeightedGraphPairedT {
+public:
+    using NodeHandle = Index;
+    using EdgeIterator = Index;
 
-    std::size_t numNodes() const;
+    explicit WeightedGraphPairedT(std::size_t num_nodes = 0, const EdgeList &edges = {})
+            : index_(num_nodes + 1), edges_(edges.size()) {
+        std::vector<std::size_t> c(num_nodes + 1);
+        for (const auto &e: edges) {
+            c[e.from + 1]++;
+        }
 
-    NodeHandle node(std::size_t n) const;
-    std::size_t nodeId(NodeHandle n) const;
+        std::inclusive_scan(c.begin(), c.end(), c.begin());
+        index_ = c;
 
-    EdgeIterator beginEdges(NodeHandle) const;
-    EdgeIterator endEdges(NodeHandle) const;
+        assert(c[0] == 0);
+        assert(c[num_nodes] == edges.size());
 
-    NodeHandle edgeHead(EdgeIterator) const;
-    double edgeWeight(EdgeIterator) const;
+        for (const auto &e: edges) {
+            edges_[c[e.from]++] = {e.to, e.length};
+        }
+    }
 
- private:
+    [[nodiscard]] std::size_t numNodes() const {
+        return index_.size() - 1;
+    };
+
+    [[nodiscard]] NodeHandle node(std::size_t n) const {
+        return n;
+    }
+
+    [[nodiscard]] std::size_t nodeId(NodeHandle n) const {
+        return n;
+    }
+
+    [[nodiscard]] EdgeIterator beginEdges(NodeHandle n) const {
+        return index_[nodeId(n)];
+    }
+
+    [[nodiscard]] EdgeIterator endEdges(NodeHandle n) const {
+        return index_[nodeId(n) + 1];
+    }
+
+    [[nodiscard]] NodeHandle edgeHead(EdgeIterator e) const {
+        return edges_[e].first;
+    }
+
+    [[nodiscard]] double edgeWeight(EdgeIterator e) const {
+        return edges_[e].second;
+    }
+
+private:
+    std::vector<Index> index_;
+    std::vector<std::pair<NodeHandle, double>> edges_;
 };
+
+using WeightedGraphPaired = WeightedGraphPairedT<>;
