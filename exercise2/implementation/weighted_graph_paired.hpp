@@ -11,11 +11,11 @@ template<class Index = uint64_t>
 class WeightedGraphPairedT {
 public:
     using NodeHandle = Index;
-    using EdgeIterator = Index;
+    using EdgeIterator = typename std::vector<std::pair<NodeHandle, double>>::const_iterator;
 
     explicit WeightedGraphPairedT(std::size_t num_nodes = 0, const EdgeList &edges = {})
             : index_(num_nodes + 1), edges_(edges.size()) {
-        std::vector<std::size_t> c(num_nodes + 1);
+        std::vector<Index> c(num_nodes + 1);
         for (const auto &e: edges) {
             c[e.from + 1]++;
         }
@@ -44,19 +44,19 @@ public:
     }
 
     [[nodiscard]] EdgeIterator beginEdges(NodeHandle n) const {
-        return index_[nodeId(n)];
+        return edges_.begin() + index_[nodeId(n)];
     }
 
     [[nodiscard]] EdgeIterator endEdges(NodeHandle n) const {
-        return index_[nodeId(n) + 1];
+        return edges_.begin() + index_[nodeId(n) + 1];
     }
 
     [[nodiscard]] NodeHandle edgeHead(EdgeIterator e) const {
-        return edges_[e].first;
+        return e->first;
     }
 
     [[nodiscard]] double edgeWeight(EdgeIterator e) const {
-        return edges_[e].second;
+        return e->second;
     }
 
 private:

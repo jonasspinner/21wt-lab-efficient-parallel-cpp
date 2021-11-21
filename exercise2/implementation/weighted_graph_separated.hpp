@@ -14,7 +14,7 @@ public:
 
     explicit WeightedGraphSeparatedT(std::size_t num_nodes = 0, const EdgeList &edges = {})
             : index_(num_nodes + 1), edges_(edges.size()), weights_(edges.size()) {
-        std::vector<std::size_t> c(num_nodes + 1);
+        std::vector<Index> c(num_nodes + 1);
         for (const auto &e: edges) {
             c[e.from + 1]++;
         }

@@ -22,7 +22,7 @@ template<class Index = uint64_t>
 class AdjacencyArrayT {
 public:
     using NodeHandle = Index;
-    using EdgeIterator = Index;
+    using EdgeIterator = typename std::vector<NodeHandle>::const_iterator;
 
     explicit AdjacencyArrayT(std::size_t num_nodes = 0, const EdgeList &edges = {})
             : index_(num_nodes + 1), edges_(edges.size()) {
@@ -59,15 +59,15 @@ public:
     }
 
     [[nodiscard]] EdgeIterator beginEdges(NodeHandle n) const {
-        return index_[nodeId(n)];
+        return edges_.begin() + index_[nodeId(n)];
     }
 
     [[nodiscard]] EdgeIterator endEdges(NodeHandle n) const {
-        return index_[nodeId(n) + 1];
+        return edges_.begin() + index_[nodeId(n) + 1];
     }
 
     [[nodiscard]] NodeHandle edgeHead(EdgeIterator e) const {
-        return edges_[e];
+        return *e;
     }
 
     [[nodiscard]] double edgeWeight(EdgeIterator) const { return 1.; /* no weighted implementation */ }
