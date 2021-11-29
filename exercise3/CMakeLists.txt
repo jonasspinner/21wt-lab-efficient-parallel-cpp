@@ -27,3 +27,7 @@ target_link_libraries(test_correctness PRIVATE OpenMP::OpenMP_CXX)
 add_executable(graph_construction tools/graph_generator.cpp)
 target_sources(graph_construction PRIVATE tools/graph_generator.cpp)
 #target_link_libraries(graph_construction Threads::Threads)
+
+add_executable(microbenchmark_access_patterns implementation/microbenchmark_access_patterns.cpp)
+target_link_libraries(microbenchmark_access_patterns PRIVATE Threads::Threads)
+target_link_libraries(microbenchmark_access_patterns PRIVATE OpenMP::OpenMP_CXX)
