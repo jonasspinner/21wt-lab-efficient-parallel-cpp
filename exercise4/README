@@ -1,0 +1,11 @@
+* We do not have a general correctness test for the concurrent queue and container
+You could/should implement a couple of correctness checks to your
+microbenchmarks (task of 4.1.c). We did not implement a general test
+because it would dictate the overall structure of the benchmarks.
+
+* The Tree and DAG tasks are somewhat self-checking
+Both generate errors, if you try to work on a task which is not yet
+ready to execute (i.e. has unfinished predecessors). This should also
+work for larger graphs. We have a set of general task Graphs that can
+be downloaded.  Additionally you can use the generators found in the
+tools folder, to generate additional graphs.
