@@ -3,11 +3,20 @@
 #include <stdexcept>
 #include <thread>
 
-#include "implementation/dynamic_connectivity.hpp"
+#include "omp.h"
+
+#ifdef DC_SEQUENTIAL
+    #include "implementation/dynamic_connectivity_sequential.hpp"
+#elif DC_LOCKLESS
+    #include "implementation/dynamic_connectivity.hpp"
+#endif
+
 #include "implementation/edge_list.hpp"
 #include "utils/commandline.hpp"
 
 int main(int argn, char** argc) {
+    //omp_set_num_threads(1024);
+
     CommandLine c(argn, argc);
 
     std::string graph      = c.strArg("-graph", "../data/test_graph1.graph");
@@ -63,5 +72,6 @@ int main(int argn, char** argc) {
                                          + " after block " + std::to_string(block) + '.'};
         }
     }
+    std::cout << "correctness test passed\n";
     return 0;
 }

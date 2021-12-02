@@ -20,13 +20,21 @@ find_package(OpenMP REQUIRED)
 #### TARGETS ###################################################################
 
 add_executable(test_correctness tests/correctness.cpp)
+target_compile_definitions(test_correctness PUBLIC DC_LOCKLESS)
 target_sources(test_correctness PRIVATE implementation/dynamic_connectivity.cpp)
 target_link_libraries(test_correctness PRIVATE Threads::Threads)
 target_link_libraries(test_correctness PRIVATE OpenMP::OpenMP_CXX)
 
+
+add_executable(test_correctness_sequential tests/correctness.cpp)
+target_compile_definitions(test_correctness_sequential PUBLIC DC_SEQUENTIAL)
+target_sources(test_correctness_sequential PRIVATE implementation/dynamic_connectivity_sequential.cpp)
+
+
 add_executable(graph_construction tools/graph_generator.cpp)
 target_sources(graph_construction PRIVATE tools/graph_generator.cpp)
 #target_link_libraries(graph_construction Threads::Threads)
+
 
 add_executable(microbenchmark_access_patterns implementation/microbenchmark_access_patterns.cpp)
 target_link_libraries(microbenchmark_access_patterns PRIVATE Threads::Threads)
