@@ -6,6 +6,8 @@
 
 #include "omp.h"
 
+#include "adj_array.hpp"
+
 
 template<class Node, class AdjIndex>
 void parallel_build_adj_array(Node n, const std::pair<Node, Node> *filtered_edges, std::size_t m,
@@ -143,6 +145,60 @@ void parallel_bfs_from_roots(Node n, const std::atomic<Node> *const union_find_p
         std::swap(frontier, bfs_frontiers[id]);
         std::swap(next_frontier, bfs_next_frontiers[id]);
         std::swap(visited, bfs_visited[id]);
+    }
+}
+
+template<class Node, class AdjIndex>
+void sequential_bfs_from_roots(const AdjacencyArrayT<Node> &graph,
+                               const std::atomic<Node> *const union_find_parents,
+                               std::vector<std::vector<Node>> &bfs_frontiers,
+                               std::vector<std::vector<Node>> &bfs_next_frontiers,
+                               std::vector<std::vector<bool>> &bfs_visited,
+                               std::atomic<Node> *bfs_parents) {
+    bfs_frontiers.resize(1);
+    bfs_next_frontiers.resize(1);
+    bfs_visited.resize(1);
+
+    auto &bfs_frontier = bfs_frontiers.back();
+    auto &bfs_next_frontier = bfs_next_frontiers.back();
+    auto &visited = bfs_visited.back();
+
+    bfs_frontier.reserve(graph.numNodes());
+    bfs_next_frontier.reserve(graph.numNodes());
+    bfs_visited.assign(graph.numNodes(), false);
+
+    for (Node u = 0; u < graph.numNodes(); ++u) {
+        assert(bfs_frontier.empty());
+        assert(bfs_next_frontier.empty());
+        if (union_find_parents[u] != u) {
+            continue;
+        }
+
+        bfs_parents[u] = -1;
+
+        bfs_frontier.push_back(u);
+        bfs_visited[graph.nodeId(u)] = true;
+
+        while (!bfs_frontier.empty()) {
+            while (!bfs_frontier.empty()) {
+                Node n = bfs_frontier.back();
+                bfs_frontier.pop_back();
+
+                for (auto e = graph.beginEdges(n); e < graph.endEdges(n); ++e) {
+                    auto neighbor = graph.edgeHead(e);
+                    auto id = graph.nodeId(neighbor);
+                    if (!bfs_visited[id]) {
+                        bfs_visited[id] = true;
+                        bfs_parents[neighbor] = n;
+                        bfs_next_frontier.push_back(neighbor);
+                    }
+                }
+            }
+            std::swap(bfs_frontier, bfs_next_frontier);
+        }
+
+        assert(bfs_frontier.empty());
+        assert(bfs_next_frontier.empty());
     }
 }
 
