@@ -75,6 +75,50 @@ void parallel_build_adj_array(Node n, const std::pair<Node, Node> *filtered_edge
 
 
 template<class Node, class AdjIndex>
+void sequential_build_adj_array(Node n, const std::pair<Node, Node> *filtered_edges, std::size_t m,
+                              AdjIndex *adj_index,
+                              std::atomic<AdjIndex> *adj_counter,
+                              Node *adj_edges) {
+
+    std::uninitialized_fill_n(adj_index, n + 1, 0);
+    for (Node u = 0; u < n + 1; ++u) {
+        ::new(&adj_counter[u]) std::atomic<AdjIndex>(0);
+    }
+
+    for (std::size_t i = 0; i < m; ++i) {
+        auto[a, b] = filtered_edges[i];
+        adj_counter[a + 1].fetch_add(1);
+        adj_counter[b + 1].fetch_add(1);
+    }
+
+
+    for (std::size_t i = 1; i < static_cast<std::size_t>(n) + 1; i++) {
+        adj_counter[i] += adj_counter[i - 1];
+    }
+
+    for (std::size_t i = 0; i < static_cast<std::size_t>(n) + 1; ++i) {
+        adj_index[i] = adj_counter[i].load();
+    }
+
+    assert(adj_counter[0] == 0);
+    assert(adj_counter[n] == (AdjIndex) (2 * m));
+
+    for (std::size_t i = 0; i < m; ++i) {
+        auto[a, b] = filtered_edges[i];
+
+        AdjIndex a_index = adj_counter[a].fetch_add(1);
+        AdjIndex b_index = adj_counter[b].fetch_add(1);
+
+        assert(a_index < static_cast<AdjIndex>(2 * n));
+        assert(b_index < static_cast<AdjIndex>(2 * n));
+
+        adj_edges[a_index] = b;
+        adj_edges[b_index] = a;
+    }
+}
+
+
+template<class Node, class AdjIndex>
 void parallel_bfs_from_roots(Node n, const std::atomic<Node> *const union_find_parents,
                              const AdjIndex *const adj_index,
                              const Node *const adj_edges,
@@ -149,8 +193,10 @@ void parallel_bfs_from_roots(Node n, const std::atomic<Node> *const union_find_p
 }
 
 template<class Node, class AdjIndex>
-void sequential_bfs_from_roots(const AdjacencyArrayT<Node> &graph,
+void sequential_bfs_from_roots(Node n,
                                const std::atomic<Node> *const union_find_parents,
+                               const AdjIndex *const adj_index,
+                               const Node *const adj_edges,
                                std::vector<std::vector<Node>> &bfs_frontiers,
                                std::vector<std::vector<Node>> &bfs_next_frontiers,
                                std::vector<std::vector<bool>> &bfs_visited,
@@ -163,11 +209,11 @@ void sequential_bfs_from_roots(const AdjacencyArrayT<Node> &graph,
     auto &bfs_next_frontier = bfs_next_frontiers.back();
     auto &visited = bfs_visited.back();
 
-    bfs_frontier.reserve(graph.numNodes());
-    bfs_next_frontier.reserve(graph.numNodes());
-    bfs_visited.assign(graph.numNodes(), false);
+    bfs_frontier.reserve(n);
+    bfs_next_frontier.reserve(n);
+    visited.assign(n, false);
 
-    for (Node u = 0; u < graph.numNodes(); ++u) {
+    for (Node u = 0; u < n; ++u) {
         assert(bfs_frontier.empty());
         assert(bfs_next_frontier.empty());
         if (union_find_parents[u] != u) {
@@ -177,19 +223,18 @@ void sequential_bfs_from_roots(const AdjacencyArrayT<Node> &graph,
         bfs_parents[u] = -1;
 
         bfs_frontier.push_back(u);
-        bfs_visited[graph.nodeId(u)] = true;
+        visited[u] = true;
 
         while (!bfs_frontier.empty()) {
             while (!bfs_frontier.empty()) {
-                Node n = bfs_frontier.back();
+                Node node = bfs_frontier.back();
                 bfs_frontier.pop_back();
 
-                for (auto e = graph.beginEdges(n); e < graph.endEdges(n); ++e) {
-                    auto neighbor = graph.edgeHead(e);
-                    auto id = graph.nodeId(neighbor);
-                    if (!bfs_visited[id]) {
-                        bfs_visited[id] = true;
-                        bfs_parents[neighbor] = n;
+                for (AdjIndex i = adj_index[node]; i < adj_index[node + 1]; ++i) {
+                    auto neighbor = adj_edges[i];
+                    if (!visited[neighbor]) {
+                        visited[neighbor] = true;
+                        bfs_parents[neighbor] = node;
                         bfs_next_frontier.push_back(neighbor);
                     }
                 }

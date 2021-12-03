@@ -5,9 +5,9 @@
 
 #include "omp.h"
 
-#ifdef DC_SEQUENTIAL
+#if defined(DC_SEQUENTIAL)
     #include "implementation/dynamic_connectivity_sequential.hpp"
-#elif DC_LOCKLESS
+#elif defined(DC_B) || defined(DC_C) || defined(DC_D) || defined(DC_E) || defined(DC_F)
     #include "implementation/dynamic_connectivity.hpp"
 #endif
 
@@ -15,7 +15,9 @@
 #include "utils/commandline.hpp"
 
 int main(int argn, char** argc) {
-    //omp_set_num_threads(1024);
+#ifndef DC_SEQUENTIAL
+    omp_set_num_threads(2048);
+#endif
 
     CommandLine c(argn, argc);
 
