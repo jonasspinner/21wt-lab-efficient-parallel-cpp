@@ -1,0 +1,27 @@
+#include <iostream>
+#include <string>
+
+#include "utils/commandline.h"
+
+#include "implementation/dag.hpp"
+#include "implementation/dag_solver.hpp"
+
+
+int main(int argn, char** argc)
+{
+    CommandLine cl(argn, argc);
+
+    std::string file = cl.strArg("-file", "../data/test_dag.graph");
+
+    DAGTask            dag(file, 0.1);
+    DAGSolver<DAGTask> solver(dag);
+
+    for (size_t i = 0; i < 5; ++i)
+    {
+        solver.solve();
+        if (dag.evaluate()) std::cout << "DAG-test successful!";
+        solver.reset();
+    }
+
+    return 0;
+}
