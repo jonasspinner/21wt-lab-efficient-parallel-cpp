@@ -24,66 +24,57 @@ void DynamicConnectivity::addEdges(const EdgeList& edges)
         }
     }
 
+    auto is_root = [&](Node u) { return is_rank_repr(union_find[u]); };
 
     parallel_build_adj_array(n, filtered_edges, num_filtered_edges.load(), adj_index, adj_counter, adj_edges);
-    parallel_bfs_from_roots(n, union_find_parents, adj_index, adj_edges, bfs_frontiers, bfs_next_frontiers, bfs_visited, bfs_parents);
+    parallel_bfs_from_roots(n, is_root, adj_index, adj_edges, bfs_frontiers, bfs_next_frontiers, bfs_visited, bfs_parents);
 }
 
 
 DynamicConnectivity::Node DynamicConnectivity::find_representative(Node node) const
 {
-    // TODO: Make thread safe
-    Node root = node;
-    while (union_find_parents[root].load() != root) {
-        root = union_find_parents[root].load();
-    }
-    return root;
+    assert(is_node_repr(node));
+    Node p = union_find[node];
+    if (is_rank_repr(p)) return node;
+    return find_representative(p);
 }
 
-DynamicConnectivity::Node DynamicConnectivity::find_representative_and_compress(Node node)
+std::pair<DynamicConnectivity::Node, DynamicConnectivity::Node> DynamicConnectivity::find_representative_and_compress(Node node)
 {
-    // TODO: Make thread safe
-    Node root = find_representative(node);
-
-    while (union_find_parents[node].load() != root) {
-        Node parent = union_find_parents[node].load();
-        union_find_parents[node].store(root);
-        node = parent;
-    }
-
-    return root;
+    assert(is_node_repr(node));
+    Node p = union_find[node];
+    if (is_rank_repr(p)) return {node, from_rank_repr(p)};
+    auto [root, rank] = find_representative_and_compress(p);
+    assert(rank >= 1);
+    if (p != root)
+        union_find[node].compare_exchange_strong(p, root);
+    return {root, rank};
 }
 
 bool DynamicConnectivity::unite(Node a, Node b) {
-    // TODO: Make thread safe
-
-#pragma omp critical
-    {
-        a = find_representative_and_compress(a);
-        b = find_representative_and_compress(b);
-    }
-
-    /*
-    a = find_representative(a);
-    b = find_representative(b);
-    */
-
-    if (a == b) {
-        return false;
-    }
-
-    Rank a_rank = union_find_ranks[a].load();
-    Rank b_rank = union_find_ranks[b].load();
-    if (a_rank < b_rank) {
-        std::swap(a, b);
-    }
-    //union_find_parents[b].store(a);
-    Node expected = b;
-    if(union_find_parents[b].compare_exchange_strong(expected, a)) {
-        if (a_rank == b_rank) {
-            Rank expected_a_rank = a_rank;
-            union_find_ranks[a].compare_exchange_strong(expected_a_rank, a_rank + 1);
+    while (true) {
+        Node rank_a, rank_b;
+        std::tie(a, rank_a) = find_representative_and_compress(a);
+        std::tie(b, rank_b) = find_representative_and_compress(b);
+        Node rank_a_repr = to_rank_repr(rank_a);
+        Node rank_b_repr = to_rank_repr(rank_b);
+        //std::cerr << "a=" << a << " rank_a=" << rank_a << " A[a]=" << union_find[a]
+        //          << " b=" << b << " rank_b=" << rank_b << " A[b]=" << union_find[b] << std::endl;
+        assert(a >= 0 && b >= 0 && rank_a >= 1 && rank_b >= 1);
+        if (a == b) return false;
+        if (rank_a < rank_b) {
+            if (union_find[a].compare_exchange_strong(rank_a_repr, b)) return true;
+        } else if (rank_a > rank_b) {
+            if (union_find[b].compare_exchange_strong(rank_b_repr, a)) return true;
+        } else {
+            if (a < b && union_find[a].compare_exchange_strong(rank_a_repr, b)) {
+                union_find[b].compare_exchange_strong(rank_b_repr, to_rank_repr(rank_b + 1));
+                return true;
+            }
+            if (a > b && union_find[b].compare_exchange_strong(rank_b_repr, a)) {
+                union_find[a].compare_exchange_strong(rank_a_repr, to_rank_repr(rank_a + 1));
+                return true;
+            }
         }
     }
-    return true;
 }

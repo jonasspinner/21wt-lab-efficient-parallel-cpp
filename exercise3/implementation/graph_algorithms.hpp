@@ -118,14 +118,15 @@ void sequential_build_adj_array(Node n, const std::pair<Node, Node> *filtered_ed
 }
 
 
-template<class Node, class AdjIndex>
-void parallel_bfs_from_roots(Node n, const std::atomic<Node> *const union_find_parents,
+template<class Node, class AdjIndex, class F>
+void parallel_bfs_from_roots(Node n,
+                             F is_root,
                              const AdjIndex *const adj_index,
                              const Node *const adj_edges,
                              std::vector<std::vector<Node>> &bfs_frontiers,
                              std::vector<std::vector<Node>> &bfs_next_frontiers,
                              std::vector<std::vector<bool>> &bfs_visited,
-                             std::atomic<Node> *bfs_parents) {
+                             Node *bfs_parents) {
 
     #pragma omp parallel for default(none) shared(n, bfs_parents)
     for (Node u = 0; u < n; ++u) {
@@ -136,7 +137,7 @@ void parallel_bfs_from_roots(Node n, const std::atomic<Node> *const union_find_p
     bfs_next_frontiers.resize(omp_get_max_threads());
     bfs_visited.resize(omp_get_max_threads());
 
-    #pragma omp parallel default(none) shared(n, union_find_parents, adj_index, adj_edges, bfs_frontiers, bfs_next_frontiers, bfs_visited, bfs_parents)
+    #pragma omp parallel default(none) shared(n, is_root, adj_index, adj_edges, bfs_frontiers, bfs_next_frontiers, bfs_visited, bfs_parents)
     {
         int id = omp_get_thread_num();
         std::vector<Node> frontier, next_frontier;
@@ -157,7 +158,7 @@ void parallel_bfs_from_roots(Node n, const std::atomic<Node> *const union_find_p
             assert(frontier.empty());
             assert(next_frontier.empty());
 
-            if (union_find_parents[u] == u) {
+            if (is_root(u)) {
                 frontier.push_back(u);
                 visited[u] = true;
 
@@ -172,7 +173,7 @@ void parallel_bfs_from_roots(Node n, const std::atomic<Node> *const union_find_p
                             auto neighbor = adj_edges[i];
                             if (!visited[neighbor]) {
                                 visited[neighbor] = true;
-                                bfs_parents[neighbor].store(node);
+                                bfs_parents[neighbor] = node;
                                 next_frontier.push_back(neighbor);
                             }
                         }
@@ -192,15 +193,15 @@ void parallel_bfs_from_roots(Node n, const std::atomic<Node> *const union_find_p
     }
 }
 
-template<class Node, class AdjIndex>
+template<class Node, class AdjIndex, class F>
 void sequential_bfs_from_roots(Node n,
-                               const std::atomic<Node> *const union_find_parents,
+                               F is_root,
                                const AdjIndex *const adj_index,
                                const Node *const adj_edges,
                                std::vector<std::vector<Node>> &bfs_frontiers,
                                std::vector<std::vector<Node>> &bfs_next_frontiers,
                                std::vector<std::vector<bool>> &bfs_visited,
-                               std::atomic<Node> *bfs_parents) {
+                               Node *bfs_parents) {
     bfs_frontiers.resize(1);
     bfs_next_frontiers.resize(1);
     bfs_visited.resize(1);
@@ -216,7 +217,7 @@ void sequential_bfs_from_roots(Node n,
     for (Node u = 0; u < n; ++u) {
         assert(bfs_frontier.empty());
         assert(bfs_next_frontier.empty());
-        if (union_find_parents[u] != u) {
+        if (!is_root(u)) {
             continue;
         }
 

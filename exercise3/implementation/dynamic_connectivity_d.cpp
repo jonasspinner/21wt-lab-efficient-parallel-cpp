@@ -2,7 +2,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "dynamic_connectivity.hpp"
+#include "dynamic_connectivity_mt.hpp"
 #include "graph_algorithms.hpp"
 #include "omp.h"
 
@@ -22,18 +22,19 @@ void DynamicConnectivity::addEdges(const EdgeList &edges) {
         }
     }
 
+    auto is_root = [&](Node u) { return union_find_parents[u] == u; };
 
     sequential_build_adj_array(n, filtered_edges, num_filtered_edges.load(), adj_index, adj_counter, adj_edges);
-    sequential_bfs_from_roots(n, union_find_parents, adj_index, adj_edges, bfs_frontiers, bfs_next_frontiers,
+    sequential_bfs_from_roots(n, is_root, adj_index, adj_edges, bfs_frontiers, bfs_next_frontiers,
                               bfs_visited, bfs_parents);
 }
 
 
 DynamicConnectivity::Node DynamicConnectivity::find_representative(Node node) const {
-    Node root = union_find_parents[node].load();
+    Node root = union_find_parents[node];
     while (root != node) {
         node = root;
-        root = union_find_parents[root].load();
+        root = union_find_parents[root];
     }
     return root;
 }
@@ -41,9 +42,9 @@ DynamicConnectivity::Node DynamicConnectivity::find_representative(Node node) co
 DynamicConnectivity::Node DynamicConnectivity::find_representative_and_compress(Node node) {
     Node root = find_representative(node);
 
-    while (union_find_parents[node].load() != root) {
-        Node parent = union_find_parents[node].load();
-        union_find_parents[node].store(root);
+    while (union_find_parents[node] != root) {
+        Node parent = union_find_parents[node];
+        union_find_parents[node] = root;
         node = parent;
     }
 
@@ -54,9 +55,7 @@ bool DynamicConnectivity::unite(Node a, Node b) {
     a = find_representative_and_compress(a);
     b = find_representative_and_compress(b);
 
-    if (a == b) {
-        return false;
-    }
+    if (a == b) return false;
 
     if (try_lock_trees(a, b)) {
         assert(a < b);
@@ -67,19 +66,19 @@ bool DynamicConnectivity::unite(Node a, Node b) {
         assert(union_find_parents[b] == b);
         assert(union_find_parents[a] != union_find_parents[b]);
 
-        Rank a_rank = union_find_ranks[a].load();
-        Rank b_rank = union_find_ranks[b].load();
-        if (a_rank < b_rank) {
-            std::swap(a, b);
-        }
-        union_find_parents[b].store(a);
+        Rank a_rank = union_find_ranks[a];
+        Rank b_rank = union_find_ranks[b];
+
+        if (a_rank < b_rank) std::swap(a, b);
+
+        union_find_parents[b] = a;
         if (a_rank == b_rank) {
-            Rank expected_a_rank = a_rank;
-            union_find_ranks[a].compare_exchange_strong(expected_a_rank, a_rank + 1);
+            union_find_ranks[a]++;
         }
 
-        union_find_mutexes[a].unlock();
+        if (a > b) std::swap(a, b);
         union_find_mutexes[b].unlock();
+        union_find_mutexes[a].unlock();
         return true;
     }
 

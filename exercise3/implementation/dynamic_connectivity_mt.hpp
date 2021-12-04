@@ -6,41 +6,33 @@
 
 #include "edge_list.hpp"
 
+#if defined(DC_B) || defined(DC_C) || defined(DC_D) || defined(DC_E)
+#define USE_MUTEX
+#endif
+
+#if defined(DC_C) || defined(DC_D) || defined(DC_E) || defined(DC_F)
+#define USE_COMPRESSION
+#endif
+
+#if defined(DC_D) || defined(DC_E) || defined(DC_F)
+#define USE_RANKS
+#endif
 
 class DynamicConnectivity {
-    /**
-     * Based on [2019 Alistarh et al].
-     *
-     *
-     * */
-/*
-@InProceedings{alistarh_et_al:LIPIcs:2020:11801,
-  author =	{Dan Alistarh and Alexander Fedorov and Nikita Koval},
-  title =	{{In Search of the Fastest Concurrent Union-Find Algorithm}},
-  booktitle =	{23rd International Conference on Principles of Distributed Systems (OPODIS 2019)},
-  pages =	{15:1--15:16},
-  series =	{Leibniz International Proceedings in Informatics (LIPIcs)},
-  ISBN =	{978-3-95977-133-7},
-  ISSN =	{1868-8969},
-  year =	{2020},
-  volume =	{153},
-  editor =	{Pascal Felber and Roy Friedman and Seth Gilbert and Avery Miller},
-  publisher =	{Schloss Dagstuhl--Leibniz-Zentrum fuer Informatik},
-  address =	{Dagstuhl, Germany},
-  URL =		{https://drops.dagstuhl.de/opus/volltexte/2020/11801},
-  URN =		{urn:nbn:de:0030-drops-118012},
-  doi =		{10.4230/LIPIcs.OPODIS.2019.15},
-  annote =	{Keywords: union-find, concurrency, evaluation, benchmarks, hardware transactional memory}
-}
-*/
 public:
     using Node = long;
 
     DynamicConnectivity() = default;
 
     explicit DynamicConnectivity(long num_nodes) : n(num_nodes)
+#ifdef USE_MUTEX
+            , union_find_mutexes(num_nodes)
+#endif
     {
-        union_find = allocate_at_least<std::atomic<Node>>(n);
+        union_find_parents = allocate_at_least<Node>(n);
+#ifdef USE_RANKS
+        union_find_ranks = allocate_at_least<Rank>(n);
+#endif
 
         filtered_edges = allocate_at_least<std::pair<Node, Node>>(n);
 
@@ -56,8 +48,14 @@ public:
 
 #pragma omp for
             for (Node u = 0; u < n; ++u) {
-                ::new(&union_find[u]) std::atomic<Node>(to_rank_repr(1));
+                ::new(&union_find_parents[u]) std::atomic<Node>(u);
             }
+#ifdef USE_RANKS
+#pragma omp for
+            for (Node u = 0; u < n; ++u) {
+                ::new(&union_find_ranks[u]) std::atomic<Rank>(0);
+            }
+#endif
 
 #pragma omp for
             for (Node u = 0; u < n; ++u) {
@@ -67,15 +65,17 @@ public:
 
 #ifndef NDEBUG
         for (Node u = 0; u < n; ++u) {
-            assert(union_find[u] == to_rank_repr(1));
+            assert(union_find_parents[u] == u);
             assert(bfs_parents[u] == -1);
         }
 #endif
     }
 
     ~DynamicConnectivity() {
-        free(union_find);
-
+        free(union_find_parents);
+#ifdef USE_RANKS
+        free(union_find_ranks);
+#endif
         free(filtered_edges);
         num_filtered_edges.store(0);
 
@@ -90,14 +90,7 @@ public:
     void addEdges(const EdgeList &edges);
 
     [[nodiscard]] bool connected(Node a, Node b) const {
-        while (true) {
-            a = find_representative(a);
-            b = find_representative(b);
-            assert(is_node_repr(a) && is_node_repr(b));
-            if (a == b) return true;
-            if (is_rank_repr(union_find[a]))
-                return false;
-        }
+        return find_representative(a) == find_representative(b);
     }
 
     // Must return -1 for roots.
@@ -106,6 +99,7 @@ public:
     }
 
 private:
+    using Rank = unsigned int;
     using AdjIndex = unsigned long;
 
     /**
@@ -114,7 +108,13 @@ private:
     Node n{0};
 
     // union find
-    std::atomic<Node> *union_find{nullptr};
+    Node *union_find_parents{nullptr};
+#ifdef USE_RANKS
+    Rank *union_find_ranks{nullptr};
+#endif
+#ifdef USE_MUTEX
+    std::vector<std::mutex> union_find_mutexes;
+#endif
 
     // preliminary edge list
     std::pair<Node, Node> *filtered_edges{nullptr};
@@ -134,8 +134,11 @@ private:
 
     [[nodiscard]] Node find_representative(Node node) const;
 
-    [[nodiscard]] std::pair<Node, Node> find_representative_and_compress(Node node);
+#ifdef USE_COMPRESSION
 
+    [[nodiscard]] Node find_representative_and_compress(Node node);
+
+#endif
 
     bool unite(Node a, Node b);
 
@@ -156,7 +159,7 @@ private:
         union_find_mutexes[b].lock();
 
         while (true) {
-            Node a_parent = union_find_parents[a].load();
+            Node a_parent = union_find_parents[a];
             if (a_parent != a) {
                 assert(a < b);
                 // a is no longer a root
@@ -191,7 +194,7 @@ private:
             assert(union_find_mutexes[a].try_lock() == false);
             assert(union_find_mutexes[b].try_lock() == false);
 
-            Node b_parent = union_find_parents[b].load();
+            Node b_parent = union_find_parents[b];
             if (b_parent != b) {
                 assert(a < b);
                 // b is no longer b root
@@ -226,7 +229,7 @@ private:
             assert(union_find_mutexes[a].try_lock() == false);
             assert(union_find_mutexes[b].try_lock() == false);
 
-            if (union_find_parents[a].load() == a && union_find_parents[b].load() == b) {
+            if (union_find_parents[a] == a && union_find_parents[b] == b) {
                 return true;
             }
         }
@@ -271,24 +274,12 @@ private:
 #endif
 #endif
 
-    constexpr static bool is_rank_repr(Node repr) {
-        return repr < 0;
-    }
-
-    constexpr static bool is_node_repr(Node repr) {
-        return repr >= 0;
-    }
-
-    constexpr static Node to_rank_repr(Node rank) {
-        return -rank;
-    }
-
-    constexpr static Node from_rank_repr(Node repr) {
-        return -repr;
-    }
-
     template<class T>
     static T *allocate_at_least(std::size_t size) {
         return static_cast<T *>(std::aligned_alloc(alignof(T), size * sizeof(T)));
     }
 };
+
+#undef USE_MUTEX
+#undef USE_COMPRESSION
+#undef USE_RANKS

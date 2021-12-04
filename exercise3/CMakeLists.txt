@@ -50,7 +50,21 @@ target_link_libraries(microbenchmark_access_patterns PRIVATE Threads::Threads)
 target_link_libraries(microbenchmark_access_patterns PRIVATE OpenMP::OpenMP_CXX)
 
 
+
+foreach(t ${TASK_LIST})
+    string(TOUPPER ${t} t_uc)
+
+    add_executable(benchmark_dynamic_connectivity_${t} tests/benchmark_dynamic_connectivity.cpp)
+    target_compile_definitions(benchmark_dynamic_connectivity_${t} PRIVATE DC_${t_uc})
+    target_sources(benchmark_dynamic_connectivity_${t} PRIVATE implementation/dynamic_connectivity_${t}.cpp)
+
+    target_link_libraries(benchmark_dynamic_connectivity_${t} PRIVATE Threads::Threads)
+    target_link_libraries(benchmark_dynamic_connectivity_${t} PRIVATE OpenMP::OpenMP_CXX)
+endforeach()
+
 add_executable(benchmark_dynamic_connectivity tests/benchmark_dynamic_connectivity.cpp)
+target_compile_definitions(benchmark_dynamic_connectivity PRIVATE DC_F)
+target_sources(benchmark_dynamic_connectivity PRIVATE implementation/dynamic_connectivity.cpp)
 target_link_libraries(benchmark_dynamic_connectivity PRIVATE Threads::Threads)
 target_link_libraries(benchmark_dynamic_connectivity PRIVATE OpenMP::OpenMP_CXX)
 

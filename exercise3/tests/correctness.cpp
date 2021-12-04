@@ -6,7 +6,16 @@
 #include <set>
 #include <map>
 
+#include "omp.h"
+
+#if defined(DC_SEQUENTIAL)
+#include "implementation/dynamic_connectivity_sequential.hpp"
+#elif defined(DC_B) || defined(DC_C) || defined(DC_D) || defined(DC_E)
+#include "implementation/dynamic_connectivity_mt.hpp"
+#elif defined(DC_F)
 #include "implementation/dynamic_connectivity.hpp"
+#endif
+
 #include "implementation/num_components.hpp"
 #include "implementation/edge_list.hpp"
 #include "utils/commandline.hpp"
@@ -121,6 +130,10 @@ void test_num_components(std::string name, EdgeList& edges, std::size_t num_node
 // author: Lucas Alber
 int main(int argn, char** argc)
 {
+    // omp_set_num_threads(2048);
+    // omp_set_num_threads(1);
+    // omp_set_num_threads(4);
+
     CommandLine c(argn, argc);
 
     std::vector<std::pair<std::string, std::string>> tests;
@@ -135,6 +148,7 @@ int main(int argn, char** argc)
         tests.push_back(std::make_pair(graph, test_graph));
     }
 
+    auto start = std::chrono::high_resolution_clock::now();
     for (auto test : tests) {
         EdgeList edges;
         EdgeList to_check;
@@ -144,9 +158,12 @@ int main(int argn, char** argc)
         std::tie(to_check, num_blocks) = readEdges(test.second);
 
         test_components<DynamicConnectivity>(test.first, edges, num_blocks, num_nodes, to_check);
-        test_parents<DynamicConnectivity>(graph, edges, num_nodes);
+        test_parents<DynamicConnectivity>(test.first, edges, num_nodes);
         test_num_components<DynamicConnectivity>(test.first, edges, num_nodes);
     }
+    auto end = std::chrono::high_resolution_clock::now();
+
+    std::cout << ((double)(end - start).count() / 1'000'000.0) << " ms\n";
 
     return 0;
 }

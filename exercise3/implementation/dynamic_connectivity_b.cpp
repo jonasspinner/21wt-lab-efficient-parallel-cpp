@@ -2,7 +2,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "dynamic_connectivity.hpp"
+#include "dynamic_connectivity_mt.hpp"
 #include "graph_algorithms.hpp"
 #include "omp.h"
 #include "adj_array.hpp"
@@ -23,17 +23,19 @@ void DynamicConnectivity::addEdges(const EdgeList &edges) {
         }
     }
 
+    auto is_root = [&](Node u) { return union_find_parents[u] == u; };
+
     sequential_build_adj_array(n, filtered_edges, num_filtered_edges.load(), adj_index, adj_counter, adj_edges);
-    sequential_bfs_from_roots(n, union_find_parents, adj_index, adj_edges, bfs_frontiers, bfs_next_frontiers,
+    sequential_bfs_from_roots(n, is_root, adj_index, adj_edges, bfs_frontiers, bfs_next_frontiers,
                               bfs_visited, bfs_parents);
 }
 
 
 DynamicConnectivity::Node DynamicConnectivity::find_representative(Node node) const {
-    Node root = union_find_parents[node].load();
+    Node root = union_find_parents[node];
     while (root != node) {
         node = root;
-        root = union_find_parents[root].load();
+        root = union_find_parents[root];
     }
     return root;
 }
@@ -55,10 +57,10 @@ bool DynamicConnectivity::unite(Node a, Node b) {
         assert(union_find_parents[b] == b);
         assert(union_find_parents[a] != union_find_parents[b]);
 
-        union_find_parents[b].store(a);
+        union_find_parents[b] = a;
 
-        union_find_mutexes[a].unlock();
         union_find_mutexes[b].unlock();
+        union_find_mutexes[a].unlock();
         return true;
     }
 
