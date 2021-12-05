@@ -2,6 +2,7 @@ import subprocess
 from pathlib import Path
 from math import log10
 from itertools import product
+import sys
 
 PROJECT_ROOT_DIR = Path("..")
 DATA_DIR = PROJECT_ROOT_DIR / "data"
@@ -39,7 +40,8 @@ def generate_graph(num_components, num_nodes_per_component, num_avg_degree) -> P
     return graph
 
 
-def run_experiment(task: str, graph: Path, num_threads: int, thread_range: bool, num_iterations: int, header: bool, output_file):
+def run_experiment(task: str, graph: Path, num_threads: int, thread_range: bool, num_iterations: int, header: bool,
+                   output_file):
     assert task in "abcdef"
     suffixes = dict(a="_sequential", b="_b", c="_c", d="_d", e="_e", f="")
     benchmark_executable = BUILD_DIR / ("benchmark_dynamic_connectivity" + suffixes[task])
@@ -56,22 +58,25 @@ def run_experiment(task: str, graph: Path, num_threads: int, thread_range: bool,
 
 
 def main():
-    num_threads = -1
+    num_threads = 4
     num_iterations = 10
+
+    if len(sys.argv) > 1:
+        num_threads = int(sys.argv[1])
 
     header = True
     with (OUTPUT_DIR / f"exp1-{num_threads}-{num_iterations}.csv").open("w") as f:
-        for t, num_components, num_components, num_nodes_per_component, num_avg_degree \
-                in product("abcdef", (10, ), (10**4, 5 * 10**4, 10**5, 5 * 10**5 ,10**6), (2,)):
+        for t, num_components, num_nodes_per_component, num_avg_degree \
+                in product("abcdef", (10,), (10 ** 4, 5 * 10 ** 4, 10 ** 5, 5 * 10 ** 5, 10 ** 6), (2,)):
             graph = generate_graph(num_components, num_nodes_per_component, num_avg_degree)
             run_experiment(t, graph, 1, False, num_iterations, header, f)
-            run_experiment(t, graph, num_threads, False, num_iterations, header, f)
             header = False
+            run_experiment(t, graph, num_threads, False, num_iterations, header, f)
 
     header = True
     with (OUTPUT_DIR / f"exp2-{num_threads}-{num_iterations}.csv").open("w") as f:
-        for t, num_components, num_components, num_nodes_per_component, num_avg_degree \
-                in product("abcdef", (10, 100), (10**5, 10**6), (2,)):
+        for t, num_components, num_nodes_per_component, num_avg_degree \
+                in product("abcdef", (10, 100), (10 ** 5, 10 ** 6), (2,)):
             graph = generate_graph(num_components, num_nodes_per_component, num_avg_degree)
             run_experiment(t, graph, num_threads, True, num_iterations, header, f)
             header = False
