@@ -54,7 +54,8 @@ def run_experiment(task: str, graph: Path, num_threads: int, thread_range: bool,
     if not header:
         cmd += " -no-header"
     print(cmd)
-    subprocess.run(cmd.split(" "), check=True, stdout=output_file, timeout=num_iterations * num_threads * 60 * 5)
+    timeout = num_iterations * (num_threads if thread_range else 1) * 60 * 5
+    subprocess.run(cmd.split(" "), check=True, stdout=output_file, timeout=timeout)
 
 
 def main():
@@ -64,22 +65,46 @@ def main():
     if len(sys.argv) > 1:
         num_threads = int(sys.argv[1])
 
-    header = True
-    with (OUTPUT_DIR / f"exp1-{num_threads}-{num_iterations}.csv").open("w") as f:
-        for t, num_components, num_nodes_per_component, num_avg_degree \
-                in product("abcdef", (10,), (10 ** 4, 5 * 10 ** 4, 10 ** 5, 5 * 10 ** 5, 10 ** 6), (2,)):
-            graph = generate_graph(num_components, num_nodes_per_component, num_avg_degree)
-            run_experiment(t, graph, 1, False, num_iterations, header, f)
-            header = False
-            run_experiment(t, graph, num_threads, False, num_iterations, header, f)
+    exp1_path = OUTPUT_DIR / f"exp1-{num_threads}-{num_iterations}.csv"
+    if not exp1_path.exists():
+        header = True
+        with exp1_path.open("w") as f:
+            for t, num_components, num_nodes_per_component, num_avg_degree \
+                    in product("abcdef", (10,), (10 ** 4, 5 * 10 ** 4, 10 ** 5, 5 * 10 ** 5, 10 ** 6), (2,)):
+                graph = generate_graph(num_components, num_nodes_per_component, num_avg_degree)
+                run_experiment(t, graph, 1, False, num_iterations, header, f)
+                header = False
+                run_experiment(t, graph, num_threads, False, num_iterations, header, f)
 
-    header = True
-    with (OUTPUT_DIR / f"exp2-{num_threads}-{num_iterations}.csv").open("w") as f:
-        for t, num_components, num_nodes_per_component, num_avg_degree \
-                in product("abcdef", (10, 100), (10 ** 5, 10 ** 6), (2,)):
-            graph = generate_graph(num_components, num_nodes_per_component, num_avg_degree)
-            run_experiment(t, graph, num_threads, True, num_iterations, header, f)
-            header = False
+    exp2_path = OUTPUT_DIR / f"exp2-{num_threads}-{num_iterations}.csv"
+    if not exp2_path.exists():
+        header = True
+        with (OUTPUT_DIR / f"exp2-{num_threads}-{num_iterations}.csv").open("w") as f:
+            for t, num_components, num_nodes_per_component, num_avg_degree \
+                    in product("abcdef", (100,), (10 ** 5,), (2,)):
+                graph = generate_graph(num_components, num_nodes_per_component, num_avg_degree)
+                run_experiment(t, graph, num_threads, True, num_iterations, header, f)
+                header = False
+
+    exp3_path = OUTPUT_DIR / f"exp3-{num_threads}-{num_iterations}.csv"
+    if not exp3_path.exists():
+        header = True
+        with (OUTPUT_DIR / f"exp3-{num_threads}-{num_iterations}.csv").open("w") as f:
+            for t, num_components, num_nodes_per_component, num_avg_degree \
+                    in product("abcdef", (100,), (10 ** 5,), (1.1,)):
+                graph = generate_graph(num_components, num_nodes_per_component, num_avg_degree)
+                run_experiment(t, graph, num_threads, True, 1, header, f)
+                header = False
+
+    exp4_path = OUTPUT_DIR / f"exp4-{num_threads}-{num_iterations}.csv"
+    if not exp4_path.exists():
+        header = True
+        with (OUTPUT_DIR / f"exp4-{num_threads}-{num_iterations}.csv").open("w") as f:
+            for t, num_components, num_nodes_per_component, num_avg_degree \
+                    in product("abcdef", (1000,), (10 ** 5,), (2,)):
+                graph = generate_graph(num_components, num_nodes_per_component, num_avg_degree)
+                run_experiment(t, graph, num_threads, True, 1, header, f)
+                header = False
 
 
 if __name__ == '__main__':
