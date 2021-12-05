@@ -4,7 +4,10 @@
 #include <mutex>
 #include <cassert>
 
+#include "omp.h"
+
 #include "edge_list.hpp"
+#include "utils/allocation.h"
 
 
 class DynamicConnectivity {
@@ -34,21 +37,29 @@ class DynamicConnectivity {
 }
 */
 public:
-    using Node = long;
+    using Node = int;
+    using AdjIndex = unsigned int;
 
     DynamicConnectivity() = default;
 
     explicit DynamicConnectivity(long num_nodes) : n(num_nodes)
     {
-        union_find = allocate_at_least<std::atomic<Node>>(n);
+        if (num_nodes >= std::numeric_limits<Node>::max())
+            throw std::runtime_error("Node type to small. Change Node and AdjIndex to be larger types.");
 
-        filtered_edges = allocate_at_least<std::pair<Node, Node>>(n);
+        union_find = allocation::allocate_at_least<std::atomic<Node>>(n);
 
-        adj_index = allocate_at_least<AdjIndex>(n + 1);
-        adj_counter = allocate_at_least<std::atomic<AdjIndex>>(n + 1);
-        adj_edges = allocate_at_least<Node>(2 * n);
+        filtered_edges = allocation::allocate_at_least<std::pair<Node, Node>>(n);
+        filtered_edges_per_thread.resize(omp_get_max_threads());
+        for (auto &f : filtered_edges_per_thread) {
+            f.reserve(n / std::max<std::size_t>(filtered_edges_per_thread.size() - 1, 1));
+        }
 
-        bfs_parents = allocate_at_least<Node>(n);
+        adj_index = allocation::allocate_at_least<AdjIndex>(n + 1);
+        adj_counter = allocation::allocate_at_least<std::atomic<AdjIndex>>(n + 1);
+        adj_edges = allocation::allocate_at_least<Node>(2 * n);
+
+        bfs_parents = allocation::allocate_at_least<Node>(n);
 
 
 #pragma omp parallel default(none)
@@ -106,8 +117,6 @@ public:
     }
 
 private:
-    using AdjIndex = unsigned long;
-
     /**
      * Members
      */
@@ -118,6 +127,7 @@ private:
 
     // preliminary edge list
     std::pair<Node, Node> *filtered_edges{nullptr};
+    std::vector<std::vector<std::pair<Node, Node>>> filtered_edges_per_thread;
     std::atomic<std::size_t> num_filtered_edges{0};
 
     // preliminary graph
@@ -285,10 +295,5 @@ private:
 
     constexpr static Node from_rank_repr(Node repr) {
         return -repr;
-    }
-
-    template<class T>
-    static T *allocate_at_least(std::size_t size) {
-        return static_cast<T *>(std::aligned_alloc(alignof(T), size * sizeof(T)));
     }
 };

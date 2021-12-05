@@ -5,16 +5,15 @@
 #include <cassert>
 
 #include "edge_list.hpp"
+#include "graph_algorithms.hpp"
+#include "utils/allocation.h"
 
-#if defined(DC_B) || defined(DC_C) || defined(DC_D) || defined(DC_E)
-#define USE_MUTEX
-#endif
 
-#if defined(DC_C) || defined(DC_D) || defined(DC_E) || defined(DC_F)
+#if defined(DC_C) || defined(DC_D) || defined(DC_E)
 #define USE_COMPRESSION
 #endif
 
-#if defined(DC_D) || defined(DC_E) || defined(DC_F)
+#if defined(DC_D) || defined(DC_E)
 #define USE_RANKS
 #endif
 
@@ -24,23 +23,26 @@ public:
 
     DynamicConnectivity() = default;
 
-    explicit DynamicConnectivity(long num_nodes) : n(num_nodes)
-#ifdef USE_MUTEX
-            , union_find_mutexes(num_nodes)
-#endif
-    {
-        union_find_parents = allocate_at_least<Node>(n);
+    explicit DynamicConnectivity(long num_nodes) : n(num_nodes), union_find_mutexes(num_nodes) {
+        if (num_nodes >= std::numeric_limits<Node>::max())
+            throw std::runtime_error("Node type to small");
+
+        union_find_parents = allocation::allocate_at_least<Node>(n);
 #ifdef USE_RANKS
-        union_find_ranks = allocate_at_least<Rank>(n);
+        union_find_ranks = allocation::allocate_at_least<Rank>(n);
 #endif
 
-        filtered_edges = allocate_at_least<std::pair<Node, Node>>(n);
+        filtered_edges = allocation::allocate_at_least<std::pair<Node, Node>>(n);
+        filtered_edges_per_thread.resize(omp_get_max_threads());
+        for (auto &f : filtered_edges_per_thread) {
+            f.reserve(n / std::max<std::size_t>(filtered_edges_per_thread.size() - 1, 1));
+        }
 
-        adj_index = allocate_at_least<AdjIndex>(n + 1);
-        adj_counter = allocate_at_least<std::atomic<AdjIndex>>(n + 1);
-        adj_edges = allocate_at_least<Node>(2 * n);
+        adj_index = allocation::allocate_at_least<AdjIndex>(n + 1);
+        adj_counter = allocation::allocate_at_least<std::atomic<AdjIndex>>(n + 1);
+        adj_edges = allocation::allocate_at_least<Node>(2 * n);
 
-        bfs_parents = allocate_at_least<Node>(n);
+        bfs_parents = allocation::allocate_at_least<Node>(n);
 
 
 #pragma omp parallel default(none)
@@ -57,6 +59,7 @@ public:
             }
 #endif
 
+            // Will be written again in bfs, but this way parentOf() is valid without a call to addEdges()
 #pragma omp for
             for (Node u = 0; u < n; ++u) {
                 ::new(&bfs_parents[u]) Node(-1);
@@ -87,7 +90,56 @@ public:
     }
 
     // should contain #pragma omp parallel for
-    void addEdges(const EdgeList &edges);
+    void addEdges(const EdgeList &edges) {
+        std::size_t num_edges = edges.size();
+        #pragma omp parallel default(none), shared(edges, num_edges, std::cerr)
+        {
+            // If omp_get_max_threads() was smaller during construction than omp_get_num_threads() is now
+            #pragma omp single
+            filtered_edges_per_thread.resize(omp_get_num_threads());
+
+            int id = omp_get_thread_num();
+
+            // Localize vector to prevent false sharing
+            std::vector<std::pair<Node, Node>> filtered_edges_local;
+            std::swap(filtered_edges_per_thread[id], filtered_edges_local);
+
+            #pragma omp for
+            for (std::size_t i = 0; i < num_edges; ++i) {
+                Node a = static_cast<Node>(edges[i].from);
+                Node b = static_cast<Node>(edges[i].to);
+
+                assert(a < n && b < n);
+
+                if (unite(a, b)) {
+                    filtered_edges_local.emplace_back(a, b);
+                }
+            }
+
+            // Only increase num_filtered_edges once per thread
+            auto pos = num_filtered_edges.fetch_add(filtered_edges_local.size());
+            for (auto[a, b]: filtered_edges_local) {
+                ::new(&filtered_edges[pos]) std::pair<Node, Node>(a, b);
+                pos++;
+            }
+
+            // Give back allocated memory
+            filtered_edges_local.clear();
+            std::swap(filtered_edges_per_thread[id], filtered_edges_local);
+        }
+
+        auto is_root = [&](Node u) { return union_find_parents[u] == u; };
+
+#ifdef DC_E
+        parallel_build_adj_array(n, filtered_edges, num_filtered_edges.load(), adj_index, adj_counter, adj_edges);
+        parallel_bfs_from_roots(n, is_root, adj_index, adj_edges, bfs_frontiers, bfs_next_frontiers, bfs_visited,
+                            bfs_parents);
+#else
+        sequential_build_adj_array(n, filtered_edges, num_filtered_edges.load(), adj_index, adj_counter, adj_edges);
+        sequential_bfs_from_roots(n, is_root, adj_index, adj_edges, bfs_frontiers, bfs_next_frontiers,
+                                  bfs_visited, bfs_parents);
+#endif
+    }
 
     [[nodiscard]] bool connected(Node a, Node b) const {
         return find_representative(a) == find_representative(b);
@@ -112,12 +164,11 @@ private:
 #ifdef USE_RANKS
     Rank *union_find_ranks{nullptr};
 #endif
-#ifdef USE_MUTEX
     std::vector<std::mutex> union_find_mutexes;
-#endif
 
     // preliminary edge list
     std::pair<Node, Node> *filtered_edges{nullptr};
+    std::vector<std::vector<std::pair<Node, Node>>> filtered_edges_per_thread;
     std::atomic<std::size_t> num_filtered_edges{0};
 
     // preliminary graph
@@ -142,8 +193,8 @@ private:
 
     bool unite(Node a, Node b);
 
-#ifdef USE_MUTEX
-#define TRY_LOCK_TREES_A
+
+#define TRY_LOCK_TREES_C
 #ifdef TRY_LOCK_TREES_A
 
     bool try_lock_trees(Node &a, Node &b) {
@@ -272,14 +323,37 @@ private:
         }
     }
 #endif
+#ifdef TRY_LOCK_TREES_C
+
+    bool try_lock_trees(Node &a, Node &b) {
+        while (true) {
+#ifdef USE_COMPRESSION
+            a = find_representative_and_compress(a);
+            b = find_representative_and_compress(b);
+#else
+            a = find_representative(a);
+            b = find_representative(b);
 #endif
 
-    template<class T>
-    static T *allocate_at_least(std::size_t size) {
-        return static_cast<T *>(std::aligned_alloc(alignof(T), size * sizeof(T)));
+            if (a == b) return false;
+
+            if (a > b) std::swap(a, b);
+            if (!union_find_mutexes[a].try_lock()) continue;
+            if (union_find_parents[a] != a || !union_find_mutexes[b].try_lock()) {
+                union_find_mutexes[a].unlock();
+                continue;
+            }
+            if (union_find_parents[b] != b) {
+                union_find_mutexes[b].unlock();
+                union_find_mutexes[a].unlock();
+                continue;
+            }
+            return true;
+        }
     }
+
+#endif
 };
 
-#undef USE_MUTEX
 #undef USE_COMPRESSION
 #undef USE_RANKS

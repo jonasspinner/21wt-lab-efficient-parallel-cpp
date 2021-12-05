@@ -7,29 +7,6 @@
 #include "omp.h"
 
 
-void DynamicConnectivity::addEdges(const EdgeList &edges) {
-    std::size_t num_edges = edges.size();
-#pragma omp parallel for default(none), shared(edges, num_edges)
-    for (std::size_t i = 0; i < num_edges; ++i) {
-        Node a = static_cast<Node>(edges[i].from);
-        Node b = static_cast<Node>(edges[i].to);
-
-        assert(a < n && b < n);
-
-        if (unite(a, b)) {
-            std::size_t pos = num_filtered_edges++;
-            ::new(&filtered_edges[pos]) std::pair<Node, Node>(a, b);
-        }
-    }
-
-    auto is_root = [&](Node u) { return union_find_parents[u] == u; };
-
-    parallel_build_adj_array(n, filtered_edges, num_filtered_edges.load(), adj_index, adj_counter, adj_edges);
-    parallel_bfs_from_roots(n, is_root, adj_index, adj_edges, bfs_frontiers, bfs_next_frontiers, bfs_visited,
-                            bfs_parents);
-}
-
-
 DynamicConnectivity::Node DynamicConnectivity::find_representative(Node node) const {
     Node root = union_find_parents[node];
     while (root != node) {
@@ -44,7 +21,10 @@ DynamicConnectivity::Node DynamicConnectivity::find_representative_and_compress(
 
     while (union_find_parents[node] != root) {
         Node parent = union_find_parents[node];
-        union_find_parents[node] = root;
+        if (union_find_mutexes[node].try_lock()) {
+            union_find_parents[node] = root;
+            union_find_mutexes[node].unlock();
+        }
         node = parent;
     }
 
