@@ -19,7 +19,9 @@
 
 class DynamicConnectivity {
 public:
-    using Node = long;
+    using Node = int;
+    using Rank = unsigned int;
+    using AdjIndex = unsigned int;
 
     DynamicConnectivity() = default;
 
@@ -151,8 +153,6 @@ public:
     }
 
 private:
-    using Rank = unsigned int;
-    using AdjIndex = unsigned long;
 
     /**
      * Members

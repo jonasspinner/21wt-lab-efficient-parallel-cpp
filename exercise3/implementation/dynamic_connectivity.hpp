@@ -1,5 +1,23 @@
 #pragma once
 
+#undef DC_F
+
+#if defined(DC_SEQUENTIAL) + defined(DC_A) + defined(DC_B) + defined(DC_C) + defined(DC_D) + defined(DC_E) + defined(DC_F) > 1
+#error Please choose at most one implementation
+#endif
+
+#if defined(DC_SEQUENTIAL) || defined(DC_A)
+#include "implementation/dynamic_connectivity_sequential.hpp"
+#elif defined(DC_B) || defined(DC_C) || defined(DC_D) || defined(DC_E)
+#include "implementation/dynamic_connectivity_mt.hpp"
+#else
+#if !defined(DC_F)
+#define DC_F
+#warning Default choice: DC_F \
+         dynamic_connectivity.cpp is the corresponing .cpp file \
+         Specify DC_A / DC_SEQUENTIAL, DC_B, DC_C, DC_D, DC_E of DC_F explicitly to silency warning
+#endif
+
 #include <atomic>
 #include <mutex>
 #include <cassert>
@@ -12,9 +30,9 @@
 
 class DynamicConnectivity {
     /**
-     * Based on [2019 Alistarh et al].
-     *
-     *
+     * Based on [2019 Alistarh et al]. Union find parent and rank structure is stored in `union_find`. To differentiate
+     * parent and and rank data, the sign bit is used. All non-negative values are node data and negative values are
+     * rank data.
      * */
 /*
 @InProceedings{alistarh_et_al:LIPIcs:2020:11801,
@@ -40,6 +58,7 @@ public:
     using Node = int;
     using AdjIndex = unsigned int;
 
+    static_assert(std::is_signed_v<Node>, "Node must be signed to allow storing of ranks for roots.");
     DynamicConnectivity() = default;
 
     explicit DynamicConnectivity(long num_nodes) : n(num_nodes)
@@ -149,138 +168,6 @@ private:
 
     bool unite(Node a, Node b);
 
-#ifdef USE_MUTEX
-#define TRY_LOCK_TREES_A
-#ifdef TRY_LOCK_TREES_A
-
-    bool try_lock_trees(Node &a, Node &b) {
-        static int i = 0;
-        constexpr bool print_event = false;
-        // We keep the invariant a < b and a has been locked before b
-        assert(a != b);
-        if (a > b) {
-            std::swap(a, b);
-        }
-        assert(a < b);
-        union_find_mutexes[a].lock();
-        union_find_mutexes[b].lock();
-
-        while (true) {
-            Node a_parent = union_find_parents[a].load();
-            if (a_parent != a) {
-                assert(a < b);
-                // a is no longer a root
-                if (a_parent == b) {
-                    if constexpr (print_event)
-                        std::cerr << i++ << " ### a_parent == b  -  a and b already in the same tree"
-                                << " a=" << a << " b=" << b << std::endl; // happens
-                    // a and b are already in the same tree
-                    union_find_mutexes[b].unlock();
-                    union_find_mutexes[a].unlock();
-                    return false;
-                }
-                if (a_parent > b) {
-                    if constexpr (print_event) std::cerr << i++ << " ### a_parent > b  -  update a" << " a=" << a << " b=" << b << std::endl;
-                    union_find_mutexes[a_parent].lock();
-                    union_find_mutexes[a].unlock();
-                    a = a_parent;
-                    std::swap(a, b);
-                    continue;
-                } else if (a_parent < b) {
-                    if constexpr (print_event)
-                        std::cerr << i++ << " ### a_parent < b  -  update a and relock b" << " a=" << a << " b=" << b << std::endl; // happens
-                    union_find_mutexes[b].unlock();
-                    union_find_mutexes[a_parent].lock();
-                    union_find_mutexes[a].unlock();
-                    union_find_mutexes[b].lock();
-                    a = a_parent;
-                }
-            }
-
-            assert(a < b);
-            assert(union_find_mutexes[a].try_lock() == false);
-            assert(union_find_mutexes[b].try_lock() == false);
-
-            Node b_parent = union_find_parents[b].load();
-            if (b_parent != b) {
-                assert(a < b);
-                // b is no longer b root
-                if (b_parent == a) {
-                    if constexpr (print_event)
-                        std::cerr << i++ << " ### b_parent == a  -  a and b already in the same tree"
-                                  << " a=" << a << " b=" << b << std::endl; // happens
-                    // a and b are already in the same tree
-                    union_find_mutexes[b].unlock();
-                    union_find_mutexes[a].unlock();
-                    return false;
-                }
-                if (b_parent > a) {
-                    if constexpr (print_event)
-                        std::cerr << i++ << " ### b_parent > a  -  update b" << " a=" << a << " b=" << b << std::endl; // happens
-                    union_find_mutexes[b_parent].lock();
-                    union_find_mutexes[b].unlock();
-                    b = b_parent;
-                } else if (b_parent < a) {
-                    if constexpr (print_event)
-                        std::cerr << i++ << " ### b_parent < a  -  update b and relock a" << " a=" << a << " b=" << b << std::endl;
-                    union_find_mutexes[a].unlock();
-                    union_find_mutexes[b_parent].lock();
-                    union_find_mutexes[b].unlock();
-                    union_find_mutexes[a].lock();
-                    b = b_parent;
-                    std::swap(a, b);
-                }
-            }
-
-            assert(a < b);
-            assert(union_find_mutexes[a].try_lock() == false);
-            assert(union_find_mutexes[b].try_lock() == false);
-
-            if (union_find_parents[a].load() == a && union_find_parents[b].load() == b) {
-                return true;
-            }
-        }
-    }
-
-#endif
-#ifdef TRY_LOCK_TREES_B
-    bool try_lock_trees(Node &a, Node &b) {
-        static int i = 0;
-        constexpr bool print_event = true;
-        if (a > b) std::swap(a, b);
-
-        //std::lock(union_find_mutexes[a], union_find_mutexes[b]);
-        union_find_mutexes[a].lock();
-        union_find_mutexes[b].lock();
-
-        while (true) {
-            if (union_find_parents[a] != a  || union_find_parents[b] != b) {
-                if constexpr(print_event) std::cerr << i++ << " ### re run" << std::endl;
-                union_find_mutexes[b].unlock();
-                union_find_mutexes[a].unlock();
-                a = find_representative(a);
-                b = find_representative(b);
-                if (a == b) return false;
-                if (a > b) std::swap(a, b);
-                //std::lock(union_find_mutexes[a], union_find_mutexes[b]);
-                union_find_mutexes[a].lock();
-                union_find_mutexes[b].lock();
-            } else {
-                assert(a < b);
-                assert(union_find_mutexes[a].try_lock() == false);
-                assert(union_find_mutexes[b].try_lock() == false);
-
-                assert(union_find_parents[a] == a);
-                assert(union_find_parents[b] == b);
-                assert(union_find_parents[a] != union_find_parents[b]);
-
-                return true;
-            }
-        }
-    }
-#endif
-#endif
-
     constexpr static bool is_rank_repr(Node repr) {
         return repr < 0;
     }
@@ -297,3 +184,5 @@ private:
         return -repr;
     }
 };
+
+#endif

@@ -4,13 +4,8 @@
 
 #include "omp.h"
 
-#if defined(DC_SEQUENTIAL)
-#include "implementation/dynamic_connectivity_sequential.hpp"
-#elif defined(DC_B) || defined(DC_C) || defined(DC_D) || defined(DC_E)
-#include "implementation/dynamic_connectivity_mt.hpp"
-#elif defined(DC_F)
 #include "implementation/dynamic_connectivity.hpp"
-#endif
+
 
 #include "utils/commandline.hpp"
 #include "implementation/edge_list.hpp"

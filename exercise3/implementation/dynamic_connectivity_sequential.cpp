@@ -3,6 +3,9 @@
 
 DynamicConnectivity::DynamicConnectivity(long num_nodes) : union_find_parents(num_nodes), union_find_ranks(num_nodes, 0)
 {
+    if (num_nodes >= std::numeric_limits<Node>::max())
+        throw std::runtime_error("Node type to small");
+
     for (Node u = 0; u < num_nodes; ++u) {
         union_find_parents[u] = u;
     }

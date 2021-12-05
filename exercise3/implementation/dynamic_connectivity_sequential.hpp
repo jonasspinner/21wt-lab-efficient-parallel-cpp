@@ -8,7 +8,7 @@
 
 class DynamicConnectivity {
  public:
-    using Node = long;
+    using Node = int;
 
     DynamicConnectivity() = default;
     explicit DynamicConnectivity(long num_nodes);
