@@ -1,6 +1,6 @@
 import subprocess
 from pathlib import Path
-import numpy as np
+from math import log10
 from itertools import product
 
 PROJECT_ROOT_DIR = Path("..")
@@ -10,7 +10,7 @@ OUTPUT_DIR = Path(".")
 
 
 def scientific(n):
-    k = int(np.log10(n))
+    k = int(log10(n))
     if 10 ** k == n:
         return f"1e{k}"
     else:
