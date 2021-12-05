@@ -44,13 +44,13 @@ namespace benchmarks {
     NumberType false_cache_sharing(const std::vector<NumberType> &values) {
         int num_threads = omp_get_max_threads();
         std::vector<NumberType> sums(num_threads);
-        int num_values = (int)values.size();
+        std::size_t num_values = values.size();
 
         #pragma omp parallel default(none) shared(sums, values, num_values)
         {
             int id = omp_get_thread_num();
             #pragma omp for
-            for (int i = 0; i < num_values; ++i) {
+            for (std::size_t i = 0; i < num_values; ++i) {
                 sums[id] += values[i];
             }
         }
@@ -80,10 +80,10 @@ namespace benchmarks {
     template <class NumberType>
     NumberType automatic_openmp(const std::vector<NumberType> &values) {
         NumberType sum{0};
-        int num_values = (int)values.size();
+        std::size_t num_values = values.size();
 
         #pragma omp parallel for default(none) shared(values, num_values) reduction(+:sum)
-        for (int i = 0; i < num_values; ++i) {
+        for (std::size_t i = 0; i < num_values; ++i) {
             sum += values[i];
         }
         return sum;
@@ -101,7 +101,7 @@ void print_header(std::ostream &os) {
     os << "result" << " ";
     os.width(10);
     os << "\"time (ms)\"" << " ";
-    os << "\n";
+    os << std::endl;
 }
 
 template <class NumberType>
@@ -116,7 +116,7 @@ void print_line(std::ostream &os, std::string_view name, std::size_t num_values,
     os << result << " ";
     os.width(10);
     os << ((double)time.count() / 1'000'000.0) << " ";
-    os << "\n";
+    os << std::endl;
 }
 
 template<class F, class NumberType>
@@ -148,7 +148,7 @@ void run_benchmark(std::size_t n, std::size_t seed,
         std::vector<NumberType> values(all_values.begin(), all_values.begin() + num_values);
 
         for (std::size_t iteration = 0; iteration < num_iterations; ++iteration) {
-            time_function_call(exp1_output, "single_threaded", 1, benchmarks::single_threaded<NumberType>, values);
+            time_function_call(exp1_output, "single_threaded", max_threads, benchmarks::single_threaded<NumberType>, values);
             if (!skip_atomic_contention)
                 time_function_call(exp1_output, "atomic_contention", max_threads, benchmarks::atomic_contention<NumberType>, values);
             time_function_call(exp1_output, "false_cache_sharing", max_threads, benchmarks::false_cache_sharing<NumberType>, values);
@@ -157,6 +157,7 @@ void run_benchmark(std::size_t n, std::size_t seed,
         }
     }
 
+    std::cout << "finished with exp1" << std::endl;
 
     std::ofstream exp2_output(exp2_output_path);
     print_header(exp2_output);
@@ -166,7 +167,7 @@ void run_benchmark(std::size_t n, std::size_t seed,
         omp_set_num_threads(num_threads);
 
         for (std::size_t iteration = 0; iteration < num_iterations; ++iteration) {
-            time_function_call(exp2_output, "single_threaded", 1, benchmarks::single_threaded<NumberType>, all_values);
+            time_function_call(exp2_output, "single_threaded", num_threads, benchmarks::single_threaded<NumberType>, all_values);
             if (!skip_atomic_contention)
                 time_function_call(exp2_output, "atomic_contention", num_threads, benchmarks::atomic_contention<NumberType>, all_values);
             time_function_call(exp2_output, "false_cache_sharing", num_threads, benchmarks::false_cache_sharing<NumberType>, all_values);
@@ -174,6 +175,9 @@ void run_benchmark(std::size_t n, std::size_t seed,
             time_function_call(exp2_output, "automatic_openmp", num_threads, benchmarks::automatic_openmp<NumberType>, all_values);
         }
     }
+
+    std::cout << "finished with exp2" << std::endl;
+
 }
 
 int main(int argn, char** argc) {
@@ -181,8 +185,8 @@ int main(int argn, char** argc) {
 
     int seed = c.intArg("-seed", 0);
     std::size_t n = c.intArg("-n", 1'000'000'000);
-    std::size_t num_steps = c.intArg("-num-steps", 20);
-    std::size_t num_iterations = c.intArg("-num-iterations", 20);
+    std::size_t num_steps = c.intArg("-num-steps", 10);
+    std::size_t num_iterations = c.intArg("-num-iterations", 10);
     std::string exp1_output_path = c.strArg("-exp1-output", "");
     std::string exp2_output_path = c.strArg("-exp2-output", "");
     std::string number_type = c.strArg("-number-type", "u64");
