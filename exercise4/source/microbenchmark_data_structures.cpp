@@ -10,7 +10,8 @@
 
 
 template<class T, class Container>
-double microbenchmark(size_t num_producers, size_t num_consumers, size_t num_elements, Container &container) {
+std::chrono::nanoseconds
+microbenchmark(size_t num_producers, size_t num_consumers, size_t num_elements, Container &container) {
     if (!container.empty()) {
         throw std::runtime_error("container is not empty");
     }
@@ -51,81 +52,70 @@ double microbenchmark(size_t num_producers, size_t num_consumers, size_t num_ele
         throw std::runtime_error("container is not empty");
     }
 
-    return utils::to_ms(t1 - t0);
+    return t1 - t0;
 }
 
 
 void print_header() {
     std::cout
-            << std::setw(10) << "num_producers" << " "
-            << std::setw(10) << "num_consumers" << " "
-            << std::setw(10) << "num_elements" << " "
-            << std::setw(10) << "capacity" << " "
-            << std::setw(10) << "time" << std::endl;
+            << std::setw(22) << "\"data_structure\"" << " "
+            << std::setw(10) << "\"num_producers\"" << " "
+            << std::setw(10) << "\"num_consumers\"" << " "
+            << std::setw(10) << "\"num_elements\"" << " "
+            << std::setw(10) << "\"capacity\"" << " "
+            << std::setw(10) << "\"time (ms)\"" << std::endl;
 }
 
-void print_line(size_t num_producers, size_t num_consumers, size_t num_elements, size_t capacity, double time) {
+void print_line(const std::string &data_structure, size_t num_producers, size_t num_consumers, size_t num_elements,
+                size_t capacity,
+                std::chrono::nanoseconds time) {
     std::cout
+            << std::setw(22) << data_structure << " "
             << std::setw(10) << num_producers << " "
             << std::setw(10) << num_consumers << " "
             << std::setw(10) << num_elements << " "
             << std::setw(10) << capacity << " "
-            << std::setw(10) << time << std::endl;
+            << std::setw(10) << utils::to_ms(time) << std::endl;
+}
+
+
+template<class Container>
+void run_grid(const std::string &data_structure, size_t max_threads, size_t num_iterations, size_t num_elements,
+              size_t capacity) {
+    print_header();
+
+    for (size_t i = 1; i <= max_threads; ++i) {
+        for (size_t j = 1; j <= max_threads; ++j) {
+            for (size_t k = 0; k < num_iterations; ++k) {
+                Container queue(capacity);
+                auto time = microbenchmark<size_t, decltype(queue)>(i, j, num_elements, queue);
+                print_line(data_structure, i, j, num_elements, capacity, time);
+            }
+        }
+    }
 }
 
 
 int main(int argn, char **argc) {
     CommandLine cl(argn, argc);
 
-    size_t num_producers = cl.intArg("-num-producers", 1);
-    size_t num_consumers = cl.intArg("-num-consumers", 1);
+    size_t max_threads = cl.intArg("-max-threads", (int) std::thread::hardware_concurrency());
     size_t num_elements = cl.intArg("-num-elements", 100000);
     size_t capacity = cl.intArg("-capacity", (1 << 15));
     size_t num_iterations = cl.intArg("-num-iterations", 5);
+    std::string data_structure = cl.strArg("-data-structure", "concurrent-queue");
 
-    size_t max_threads = std::thread::hardware_concurrency();
 
-    {
-        ConcurrentQueue<size_t> queue(capacity);
-        double time = microbenchmark<size_t, decltype(queue)>(max_threads, max_threads, num_elements, queue);
-        print_line(max_threads, max_threads, num_elements, capacity, time);
+    if (data_structure == "concurrent-queue") {
+        run_grid<ConcurrentQueue<int>>(data_structure, max_threads, num_iterations, num_elements, capacity);
+    } else if (data_structure == "mutex-std-queue") {
+        run_grid<ConcurrentQueue<int>>(data_structure, max_threads, num_iterations, num_elements, capacity);
+    } else if (data_structure == "concurrent-container") {
+        run_grid<ConcurrentQueue<int>>(data_structure, max_threads, num_iterations, num_elements, capacity);
+    } else {
+        std::cout << "invalid  \"-data-structure " << data_structure << "\"" << std::endl;
+        return 1;
     }
-    {
-        MutexStdQueue<size_t> queue(capacity);
-        double time = microbenchmark<size_t, decltype(queue)>(max_threads, max_threads, num_elements, queue);
-        print_line(max_threads, max_threads, num_elements, capacity, time);
-    }
-    {
-        ConcurrentContainer<size_t> container(capacity);
-        double time = microbenchmark<size_t, decltype(container)>(max_threads, max_threads, num_elements, container);
-        print_line(max_threads, max_threads, num_elements, capacity, time);
-    }
-    /*
-    print_header();
-
-    for (size_t i = 1; i <= max_threads; ++i) {
-        for (size_t j = 1; j <= max_threads; ++j) {
-            for (size_t k = 0; k < num_iterations; ++k) {
-                ConcurrentQueue<size_t> queue(capacity);
-                double time = microbenchmark<size_t, decltype(queue)>(i, j, num_elements, queue);
-                print_line(i, j, num_elements, capacity, time);
-            }
-        }
-    }
-
-
-    print_header();
-
-    for (size_t i = 1; i <= max_threads; ++i) {
-        for (size_t j = 1; j <= max_threads; ++j) {
-            for (size_t k = 0; k < num_iterations; ++k) {
-                ConcurrentContainer<size_t> container(capacity);
-                double time = microbenchmark<size_t, ConcurrentContainer<size_t>>(i, j, num_elements, container);
-                print_line(i, j, num_elements, capacity, time);
-            }
-        }
-    }
-    */
 
     return 0;
 }
