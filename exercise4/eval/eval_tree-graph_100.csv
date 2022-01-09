@@ -1,0 +1,22 @@
+                   "file" "num_nodes" "capacity" "num_threads" "work_factor" "time (ms)"  "success"
+   ../data/tree_100.graph        100        100          1          0   0.097163          1
+   ../data/tree_100.graph        100        100          1          0   0.052897          1
+   ../data/tree_100.graph        100        100          1          0   0.047646          1
+   ../data/tree_100.graph        100        100          1          0    0.03365          1
+   ../data/tree_100.graph        100        100          1          0   0.033106          1
+   ../data/tree_100.graph        100        100          2          0   0.050358          1
+   ../data/tree_100.graph        100        100          2          0    0.04262          1
+   ../data/tree_100.graph        100        100          2          0    0.03956          1
+   ../data/tree_100.graph        100        100          2          0   0.042299          1
+   ../data/tree_100.graph        100        100          2          0   0.039142          1
+   ../data/tree_100.graph        100        100          3          0   0.066487          1
+   ../data/tree_100.graph        100        100          3          0   0.049595          1
+   ../data/tree_100.graph        100        100          3          0   0.049464          1
+   ../data/tree_100.graph        100        100          3          0   0.050944          1
+   ../data/tree_100.graph        100        100          3          0   0.049362          1
+   ../data/tree_100.graph        100        100          4          0   0.084734          1
+   ../data/tree_100.graph        100        100          4          0   0.066619          1
+   ../data/tree_100.graph        100        100          4          0   0.064684          1
+   ../data/tree_100.graph        100        100          4          0   0.057074          1
+   ../data/tree_100.graph        100        100          4          0   0.065392          1
+   ../data/tree_100.graph        100        100          1        0.1    3789.74          1
