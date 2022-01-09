@@ -11,7 +11,7 @@ int main(int argn, char** argc)
 {
     CommandLine cl(argn, argc);
 
-    std::string file = cl.strArg("-file", "../data/test_dag.graph");
+    std::string file = cl.strArg("-file", "../data/graph_100.graph");
 
     DAGTask            dag(file, 0.1);
     DAGSolver<DAGTask> solver(dag);
@@ -19,7 +19,7 @@ int main(int argn, char** argc)
     for (size_t i = 0; i < 5; ++i)
     {
         solver.solve();
-        if (dag.evaluate()) std::cout << "DAG-test successful!";
+        if (dag.evaluate()) std::cout << "DAG-test successful!" << std::endl;
         solver.reset();
     }
 
