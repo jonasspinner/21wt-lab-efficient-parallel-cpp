@@ -109,9 +109,9 @@ int main(int argn, char **argc) {
     if (data_structure == "concurrent-queue") {
         run_grid<ConcurrentQueue<int>>(data_structure, max_threads, num_iterations, num_elements, capacity);
     } else if (data_structure == "mutex-std-queue") {
-        run_grid<ConcurrentQueue<int>>(data_structure, max_threads, num_iterations, num_elements, capacity);
+        run_grid<MutexStdQueue<int>>(data_structure, max_threads, num_iterations, num_elements, capacity);
     } else if (data_structure == "concurrent-container") {
-        run_grid<ConcurrentQueue<int>>(data_structure, max_threads, num_iterations, num_elements, capacity);
+        run_grid<ConcurrentContainer<int>>(data_structure, max_threads, num_iterations, num_elements, capacity);
     } else {
         std::cout << "invalid  \"-data-structure " << data_structure << "\"" << std::endl;
         return 1;
