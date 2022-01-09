@@ -7,24 +7,31 @@
 
 
 // This template is beneficial for our consistent interface
-template <class Tree>
-class TreeSolver
-{
+template<class Tree>
+class TreeSolverNaive {
 private:
-    using NodeId       = typename Tree::NodeId;
+    using NodeId = typename Tree::NodeId;
     using NodeIterator = typename Tree::NodeIterator;
 
 public:
-    explicit TreeSolver(Tree& tree) : m_tree(tree){    }
-    TreeSolver(const TreeSolver& src) = delete;
-    TreeSolver(TreeSolver&& src)  noexcept = default;
-    TreeSolver& operator=(const TreeSolver& src) = delete;
-    TreeSolver& operator=(TreeSolver&& src) noexcept     {
+    explicit TreeSolverNaive(Tree &tree) : TreeSolverNaive(tree, tree.size(), std::thread::hardware_concurrency()) {}
+
+    explicit TreeSolverNaive(Tree &tree, size_t capacity, size_t num_threads) : m_tree(tree), m_capacity(capacity),
+                                                                                m_task_queue(m_capacity),
+                                                                                m_num_threads(num_threads) {}
+
+    TreeSolverNaive(const TreeSolverNaive &src) = delete;
+
+    TreeSolverNaive(TreeSolverNaive &&src) noexcept = default;
+
+    TreeSolverNaive &operator=(const TreeSolverNaive &src) = delete;
+
+    TreeSolverNaive &operator=(TreeSolverNaive &&src) noexcept {
         // magic move assignment operator
         // don't think about it too much
         if (this == &src) return *this;
         this->~TreeSolver();
-        new (this) TreeSolver(std::move(src));
+        new(this) TreeSolverNaive(std::move(src));
         return *this;
     }
 
@@ -32,38 +39,39 @@ public:
     void solve() {
         size_t n = m_tree.size();
 
-        MutexStdQueue<NodeId> task_queue(n);
-        task_queue.push(0);
-
-        size_t num_threads = std::thread::hardware_concurrency();
+        m_task_queue.push(1);
 
         std::atomic<int> num_work_left = n;
-        constexpr auto end_work = std::numeric_limits<NodeId>::max();
 
         auto do_work = [&]() {
             while (true) {
                 if (num_work_left.fetch_sub(1) <= 0) return;
-                NodeId current = task_queue.pop();
+                NodeId current = m_task_queue.pop() - 1;
 
-                auto [start, end] = m_tree.work(current);
+                auto[start, end] = m_tree.work(current);
                 for (auto i = start; i < end; ++i) {
-                    task_queue.push(*i);
+                    m_task_queue.push(*i + 1);
                 }
 
             }
         };
-        std::vector<std::thread> threads(num_threads);
-        for (auto& t : threads)
+        std::vector<std::thread> threads(m_num_threads);
+        for (auto &t: threads)
             t = std::thread(do_work);
 
-        for (auto& t : threads)
+        for (auto &t: threads)
             t.join();
     }
 
     void reset() {
         m_tree.reset();
+        m_task_queue.reset();
     }
 
 private:
-    Tree& m_tree;
+    Tree &m_tree;
+
+    size_t m_capacity;
+    MutexStdQueue<NodeId> m_task_queue;
+    size_t m_num_threads;
 };

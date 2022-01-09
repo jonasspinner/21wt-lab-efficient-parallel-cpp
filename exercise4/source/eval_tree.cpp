@@ -1,6 +1,7 @@
 
 #include <iomanip>
 #include "implementation/tree_solver.hpp"
+#include "implementation/tree_solver_naive.hpp"
 #include "utils/commandline.h"
 
 
@@ -49,7 +50,7 @@ void benchmark_tree_solver(const std::string &out_file, const std::string &file,
         size_t capacity = tree.size();
 
         for (size_t num_threads = 1; num_threads <= max_num_threads; ++num_threads) {
-            TreeSolver<TreeTask> solver(tree, capacity, num_threads);
+            TreeSolverNaive<TreeTask> solver(tree, capacity, num_threads);
 
             for (size_t i = 0; i < num_iterations; ++i) {
                 auto t0 = std::chrono::high_resolution_clock::now();
@@ -146,10 +147,13 @@ int main(int argn, char **argc) {
     double min_work_factor = cl.doubleArg("-min-work-factor", 0.0);
     double max_work_factor = cl.doubleArg("-max-work-factor", 1.0);
 
+    std::string type = cl.strArg("-type", "benchmark");
+
+    if (type == "benchmark") {
     benchmark_tree_solver("../eval/eval_tree-graph_100.csv", file, num_work_factors, num_iterations, max_num_threads,
                           min_work_factor, max_work_factor);
-
+    } else if (type == "stats") {
     //stats_tree_solver("../eval/tree_solver_queue_sizes_test.csv", file, max_num_threads, 0.1);
-
+    }
     return 0;
 }

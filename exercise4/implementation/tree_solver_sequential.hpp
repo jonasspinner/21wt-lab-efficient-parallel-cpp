@@ -8,28 +8,28 @@
 
 // This template is beneficial for our consistent interface
 template<class Tree>
-class TreeSolver {
+class TreeSolverSequential {
 private:
     using NodeId = typename Tree::NodeId;
     using NodeIterator = typename Tree::NodeIterator;
 
 public:
-    explicit TreeSolver(Tree &tree) : _tree(tree) {
+    explicit TreeSolverSequential(Tree &tree) : _tree(tree) {
         // Here you could do some precomputation
     }
 
-    TreeSolver(const TreeSolver &src) = delete;
+    TreeSolverSequential(const TreeSolverSequential &src) = delete;
 
-    TreeSolver(TreeSolver &&src) noexcept = default;
+    TreeSolverSequential(TreeSolverSequential &&src) noexcept = default;
 
-    TreeSolver &operator=(const TreeSolver &src) = delete;
+    TreeSolverSequential &operator=(const TreeSolverSequential &src) = delete;
 
-    TreeSolver &operator=(TreeSolver &&src) noexcept {
+    TreeSolverSequential &operator=(TreeSolverSequential &&src) noexcept {
         // magic move assignment operator
         // don't think about it too much
         if (this == &src) return *this;
         this->~TreeSolver();
-        new(this) TreeSolver(std::move(src));
+        new(this) TreeSolverSequential(std::move(src));
         return *this;
     }
 
