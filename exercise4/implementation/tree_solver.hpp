@@ -100,7 +100,7 @@ public:
                     unlock_stats_and_local_queues();
                 }
 
-                NodeId current;
+                NodeId current{};
                 if (!local_queue.empty()) {
                     lock_stats_and_local_queues();
 
@@ -113,7 +113,6 @@ public:
                         for (size_t i = 0; i < m_num_threads; ++i) {
                             m_global_queue.push(done_task);
                         }
-                        return;
                     };
                     current = m_global_queue.pop();
                 }
@@ -176,6 +175,18 @@ public:
 
         for (auto &t: threads)
             t.join();
+
+
+        // To be absolutely sure
+        while (!m_global_queue.empty()) {
+            NodeId current = m_global_queue.pop();
+            if (current != done_task) {
+                current--;
+                for (auto child : utils::Range{m_tree.work(current)}) {
+                    m_global_queue.push(child);
+                }
+            }
+        }
     }
 
     void reset() {

@@ -7,6 +7,12 @@
 
 template<class T, bool keep_stats = false>
 class ConcurrentContainer {
+    /**
+     * Keeps an array of elements. Every thread keeps an thread-local offset managed by thread_offset().
+     *
+     * Producers walk until they can CAS(0 -> T) and consumers until CAS(T -> 0).
+     * If the array is empty or full, the producers/consumers walk every element at most once, before reporting an error.
+     */
 public:
     explicit ConcurrentContainer(std::size_t capacity) : m_capacity(capacity) {
         m_elements = std::make_unique<std::atomic<T>[]>(m_capacity);

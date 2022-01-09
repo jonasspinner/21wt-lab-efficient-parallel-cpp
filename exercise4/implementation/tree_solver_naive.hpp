@@ -15,7 +15,7 @@ private:
     using NodeIterator = typename Tree::NodeIterator;
 
 public:
-    explicit TreeSolver(Tree& tree) : _tree(tree){    }
+    explicit TreeSolver(Tree& tree) : m_tree(tree){    }
     TreeSolver(const TreeSolver& src) = delete;
     TreeSolver(TreeSolver&& src)  noexcept = default;
     TreeSolver& operator=(const TreeSolver& src) = delete;
@@ -61,7 +61,7 @@ public:
     }
 
     void reset() {
-        _tree.reset();
+        m_tree.reset();
     }
 
 private:
