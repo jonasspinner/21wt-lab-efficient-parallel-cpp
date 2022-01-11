@@ -5,6 +5,7 @@
 
 Linked lists are important primitives which used for implementing more complex data structures.
 
+
 ### a) Implementation (5)
 
 Implement a concurrent linked list. Think about how to make sure that elements do not get deallocated while some thread
@@ -32,13 +33,16 @@ The map should
 
 You can assume that the hashmap will be initialized with a capacity and does not need to grow.
 
+
 ### a) Implemenation (6)
 
 Implement the concurrent hashmap by having a mutex for each bucket.
 
+
 ### b) Lockless variant (2)
 
 Now use the linked list implementation from the previous task for the bucket data structure.
+
 
 
 ## 3. Benchmarking (4)
@@ -46,10 +50,12 @@ Now use the linked list implementation from the previous task for the bucket dat
 In many real world application the operations tend to be read-heavy and the occurrence of data point is skewed. Write
 benchmarks that compare those scenarios with more artificial data.
 
+
 ### a) Data generation (1)
 
 Implement a pseudo-random instance generator to generate uniform and skewed key distributions and varying ratio between
 reads and writes.
+
 
 ### b) Evaluation (2)
 
