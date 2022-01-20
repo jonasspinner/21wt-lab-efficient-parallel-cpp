@@ -142,6 +142,8 @@ TEST(AtomicSharedPointerTest, AtomicCompareExchange) {
     using epcpp::atomic::shared_ptr;
     using epcpp::atomic::atomic;
 
+    static_assert(atomic<shared_ptr<Counter>>::is_always_lock_free);
+
     std::atomic<long> num_constructor = 0;
     std::atomic<long> num_destructor = 0;
 
@@ -174,7 +176,7 @@ TEST(AtomicSharedPointerTest, AtomicCompareExchange) {
     ASSERT_EQ(ptr_c.use_count(), 1);
 
     {
-        // a (nullptr => nullptr)
+        // CAS(atomic_ptr[a], nullptr => nullptr) : atomic_ptr[a]
         shared_ptr<Counter> expected;
 
         ASSERT_EQ(ptr_a.use_count(), 3);
@@ -192,7 +194,7 @@ TEST(AtomicSharedPointerTest, AtomicCompareExchange) {
     }
 
     {
-        // a (b => nullptr)
+        // CAS(atomic_ptr[a], b => nullptr) : atomic_ptr[a]
         shared_ptr<Counter> expected = ptr_b;
 
         ASSERT_EQ(ptr_a.use_count(), 3);
@@ -210,7 +212,7 @@ TEST(AtomicSharedPointerTest, AtomicCompareExchange) {
     }
 
     {
-        // a (nullptr => b)
+        // CAS(atomic_ptr[a], nullptr => b) : atomic_ptr[a]
         shared_ptr<Counter> expected;
 
         ASSERT_EQ(ptr_a.use_count(), 3);
@@ -228,7 +230,7 @@ TEST(AtomicSharedPointerTest, AtomicCompareExchange) {
     }
 
     {
-        // a (b => c)
+        // CAS(atomic_ptr[a], b => c) : atomic_ptr[a]
         shared_ptr<Counter> expected = ptr_b;
 
         ASSERT_EQ(ptr_a.use_count(), 3);
@@ -246,7 +248,7 @@ TEST(AtomicSharedPointerTest, AtomicCompareExchange) {
     }
 
     {
-        // a (a => b)
+        // CAS(atomic_ptr[a], a => b) : atomic_ptr[b]
         shared_ptr<Counter> expected = ptr_a;
 
         ASSERT_EQ(ptr_a.use_count(), 4);
@@ -265,7 +267,7 @@ TEST(AtomicSharedPointerTest, AtomicCompareExchange) {
     }
 
     {
-        // b (b => c)
+        // CAS(atomic_ptr[b], b => c) : atomic_ptr[c]
         shared_ptr<Counter> expected = ptr_b;
 
         ASSERT_EQ(ptr_a.use_count(), 2);
