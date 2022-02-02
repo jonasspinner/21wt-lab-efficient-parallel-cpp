@@ -45,3 +45,6 @@ add_executable(atomic_shared_ptr_test tests/atomic_shared_ptr_test.cpp)
 target_link_libraries(atomic_shared_ptr_test gtest_main)
 gtest_discover_tests(atomic_shared_ptr_test)
 
+add_executable(hash_map_test tests/hash_map_test.cpp)
+target_link_libraries(hash_map_test gtest_main)
+gtest_discover_tests(hash_map_test)

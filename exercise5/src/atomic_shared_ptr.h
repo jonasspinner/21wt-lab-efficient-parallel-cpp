@@ -158,6 +158,9 @@ namespace epcpp::atomic {
         }
 
         shared_ptr<T> load(std::memory_order order = std::memory_order_seq_cst) const noexcept {
+            // WARNING: this is broken
+            // `m_ptr` might release the object pointed to by `ptr` before the reference count could be updated
+            // due to other operations on `m_ptr`.
             auto *ptr = m_ptr.load(order);
             if (ptr) ptr->m_ref_count.fetch_add(1);
             return shared_ptr<T>::from_raw(ptr);

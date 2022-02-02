@@ -10,9 +10,9 @@ class BucketTest : public ::testing::Test {
 };
 
 using BucketTypes = ::testing::Types<
-        epcpp::ListBucket<int, int>,
-        epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int>>,
-        epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int>, 10>
+        epcpp::StdListBucket<int, int>,
+        epcpp::BloomFilterAdapter<epcpp::StdListBucket<int, int>>,
+        epcpp::BloomFilterAdapter<epcpp::StdListBucket<int, int>, 10>
 >;
 TYPED_TEST_SUITE(BucketTest, BucketTypes);
 
@@ -31,19 +31,19 @@ TYPED_TEST(BucketTest, InsertRemove) {
     };
 
     for (int i = 0; i < num_elements; ++i) {
-        bool new_insert = bucket.insert(std::pair{i, i}, hash(i));
-        ASSERT_TRUE(new_insert);
+        auto [h, inserted] = bucket.insert(std::pair{i, i}, hash(i));
+        ASSERT_TRUE(inserted);
     }
     for (int i = 0; i < num_elements; ++i) {
-        bool new_insert = bucket.insert(std::pair{i, i + 2}, hash(i));
-        ASSERT_FALSE(new_insert);
+        auto [h, inserted] = bucket.insert(std::pair{i, i + 2}, hash(i));
+        ASSERT_FALSE(inserted);
     }
     for (int i = num_elements; i < 2 * num_elements; ++i) {
-        bool removed = bucket.remove(i, hash(i));
+        bool removed = bucket.erase(i, hash(i));
         ASSERT_FALSE(removed);
     }
     for (int i = 0; i < num_elements; ++i) {
-        bool removed = bucket.remove(i, hash(i));
+        bool removed = bucket.erase(i, hash(i));
         ASSERT_TRUE(removed);
     }
 }

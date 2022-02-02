@@ -21,21 +21,29 @@ namespace epcpp {
          */
     public:
         using key_type = typename BucketBase::key_type;
+        using mapped_type = typename BucketBase::mapped_type;
         using value_type = typename BucketBase::value_type;
-        using key_value_type = typename BucketBase::key_value_type;
         using key_equal = typename BucketBase::key_equal;
+        using handle = typename BucketBase::handle;
 
         BloomFilterAdapter() {
             static_assert(concepts::Bucket<std::remove_reference_t<decltype(*this)>>);
         }
 
-        bool insert(key_value_type &&key_value_pair, std::size_t hash) {
+        std::pair<handle, bool> insert(value_type &&key_value_pair, std::size_t hash) {
             bloom_filter_insert(hash);
 
             return m_bucket.insert(std::move(key_value_pair), hash);
         }
 
-        bool remove(const key_type &key, std::size_t hash) {
+        handle find(const key_type &key, std::size_t hash) {
+            if (bloom_filter_contains(hash)) {
+                return m_bucket.find(key, hash);
+            }
+            return end();
+        }
+
+        bool erase(const key_type &key, std::size_t hash) {
             std::cout << "[bloom] remove(" << key << "," << hash << ") "
                       << (bloom_filter_contains(hash) ? "in" : "not in") << " bloom filter \t k=" << NumFilters << std::endl;
             std::cout << "\thash   " << std::bitset<64>(hash) << std::endl;
@@ -43,9 +51,13 @@ namespace epcpp {
             std::cout << "\tmask   " << std::bitset<64>(get_filter_mask(hash)) << std::endl;
 
             if (bloom_filter_contains(hash)) {
-                return m_bucket.remove(key, hash);
+                return m_bucket.erase(key, hash);
             }
             return false;
+        }
+
+        handle end() {
+            return m_bucket.end();
         }
 
     private:
