@@ -24,7 +24,9 @@ namespace epcpp {
         using mapped_type = typename BucketBase::mapped_type;
         using value_type = typename BucketBase::value_type;
         using key_equal = typename BucketBase::key_equal;
+
         using handle = typename BucketBase::handle;
+        using const_handle = typename BucketBase::const_handle;
 
         BloomFilterAdapter() {
             static_assert(concepts::Bucket<std::remove_reference_t<decltype(*this)>>);
@@ -43,35 +45,45 @@ namespace epcpp {
             return end();
         }
 
+        const_handle find(const key_type &key, std::size_t hash) const {
+            if (bloom_filter_contains(hash)) {
+                return m_bucket.find(key, hash);
+            }
+            return end();
+        }
+
         bool erase(const key_type &key, std::size_t hash) {
+            /*
             std::cout << "[bloom] remove(" << key << "," << hash << ") "
                       << (bloom_filter_contains(hash) ? "in" : "not in") << " bloom filter \t k=" << NumFilters << std::endl;
             std::cout << "\thash   " << std::bitset<64>(hash) << std::endl;
             std::cout << "\tfilter " << std::bitset<64>(m_bloom_filter) << std::endl;
             std::cout << "\tmask   " << std::bitset<64>(get_filter_mask(hash)) << std::endl;
-
+            */
             if (bloom_filter_contains(hash)) {
                 return m_bucket.erase(key, hash);
             }
             return false;
         }
 
-        handle end() {
-            return m_bucket.end();
-        }
+        handle end() { return m_bucket.end(); }
+
+        const_handle cend() const { return m_bucket.cend(); }
+
+        const_handle end() const { return m_bucket.end(); }
 
     private:
         void bloom_filter_insert(std::size_t hash) {
             m_bloom_filter.fetch_or(get_filter_mask(hash), std::memory_order_relaxed);
         }
 
-        bool bloom_filter_contains(std::size_t hash) {
+        bool bloom_filter_contains(std::size_t hash) const {
             const auto filter = m_bloom_filter.load(std::memory_order_relaxed);
             const auto mask = get_filter_mask(hash);
             return (filter & mask) == mask;
         }
 
-        std::uint64_t get_filter_mask(std::size_t hash) {
+        static std::uint64_t get_filter_mask(std::size_t hash) {
             // Use blocks of 6 bits, starting from the most significant bits, to get indices into the 64-bit filter.
             static_assert(std::numeric_limits<std::size_t>::digits == 64);
             constexpr std::uint64_t filter_width = 64;

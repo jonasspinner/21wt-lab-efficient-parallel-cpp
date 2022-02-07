@@ -22,6 +22,10 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 
+#find_package(benchmark REQUIRED)
+#find_package(Threads REQUIRED)
+
+
 #### TARGETS ###################################################################
 
 
@@ -45,6 +49,16 @@ add_executable(atomic_shared_ptr_test tests/atomic_shared_ptr_test.cpp)
 target_link_libraries(atomic_shared_ptr_test gtest_main)
 gtest_discover_tests(atomic_shared_ptr_test)
 
+add_executable(marked_ptr_test tests/marked_ptr_test.cpp)
+target_link_libraries(marked_ptr_test gtest_main)
+gtest_discover_tests(marked_ptr_test)
+
 add_executable(hash_map_test tests/hash_map_test.cpp)
 target_link_libraries(hash_map_test gtest_main)
 gtest_discover_tests(hash_map_test)
+
+
+
+#### BENCHMARKS ################################################################
+
+add_executable(list_benchmark benchmarks/list_benchmark.cpp)

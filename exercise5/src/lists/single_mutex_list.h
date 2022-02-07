@@ -13,60 +13,149 @@ namespace epcpp {
     private:
         struct node;
 
+        template<class ValueType>
+        class Handle;
+
+        using Compare = std::equal_to<>;
+        constexpr static Compare compare{};
+
     public:
         using value_type = T;
 
-        class handle;
+        using handle = Handle<T>;
+        using const_handle = Handle<const T>;
 
         class node_manager {
         };
 
-        single_mutex_list() : m_mutex(std::make_unique<std::shared_mutex>()) {
+        single_mutex_list() {
             static_assert(concepts::List<std::remove_reference_t<decltype(*this)>>);
         }
 
         explicit single_mutex_list(node_manager &) : single_mutex_list() {}
 
-        template<class Key, class Compare = std::equal_to<>>
-        handle find(const Key &key, Compare compare = Compare{}) const;
+        template<class Value>
+        std::pair<handle, bool> insert(Value &&value);
 
-        std::pair<handle, bool> insert(value_type e);
+        template<class Value>
+        handle find(const Value &value);
 
-        template<class Key, class Compare = std::equal_to<>>
-        bool erase(const Key &key, Compare compare = Compare{});
+        template<class Value>
+        const_handle find(const Value &value) const {
+            return const_cast<single_mutex_list *>(this)->find(value, compare);
+        }
 
-        handle end() const { return handle(); }
+        template<class Value>
+        bool erase(const Value &value);
+
+        handle end() { return {}; }
+
+        const_handle cend() const { return {}; }
+
+        const_handle end() const { return {}; }
 
     private:
         using node_ptr = std::shared_ptr<node>;
 
-        std::unique_ptr<std::shared_mutex> m_mutex;
+        mutable std::shared_mutex m_mutex;
         node_ptr m_head{};
     };
 
+
+    template<class T>
+    template<class Value>
+    auto single_mutex_list<T>::insert(Value &&value) -> std::pair<handle, bool> {
+        std::unique_lock lock(m_mutex);
+        auto node = m_head;
+        if (node) {
+            while (node->next) {
+                if (compare(node->value, value)) {
+                    return {handle(std::move(node)), false};
+                }
+                node = node->next;
+            }
+            if (compare(node->value, value)) {
+                return {handle(std::move(node)), false};
+            }
+
+            assert(!node->next);
+            node->next = std::make_shared<single_mutex_list<T>::node>(std::forward<Value>(value));
+            return {handle(node->next), true};
+        } else {
+            assert(!m_head);
+            m_head = std::make_shared<single_mutex_list<T>::node>(std::forward<Value>(value));
+            return {handle(m_head), true};
+        }
+    }
+
+
+    template<class T>
+    template<class Value>
+    auto single_mutex_list<T>::find(const Value &value) -> handle {
+        std::shared_lock lock(m_mutex);
+
+        for (auto node = m_head; node; node = node->next) {
+            if (compare(node->value, value)) {
+                return handle(std::move(node));
+            }
+        }
+        return {};
+    }
+
+
+    template<class T>
+    template<class Value>
+    bool single_mutex_list<T>::erase(const Value &value) {
+        std::unique_lock lock(m_mutex);
+
+        node_ptr prev_node;
+        auto node = m_head;
+
+        while (node && !compare(node->value, value)) {
+            prev_node = node;
+            node = node->next;
+        }
+        if (node) {
+            if (prev_node) {
+                prev_node->next = node->next;
+            } else {
+                m_head = node->next;
+            }
+            return true;
+        }
+        return false;
+    }
+
+
     template<class T>
     struct single_mutex_list<T>::node {
-        explicit node(value_type &&value) : value(std::move(value)), next() {}
+        node(const node &) = delete;
+
+        node(node &&) = delete;
+
+        template<class Value>
+        explicit node(Value &&value) : value(std::forward<Value>(value)) {}
 
         T value;
         std::shared_ptr<node> next;
     };
 
     template<class T>
-    class single_mutex_list<T>::handle {
+    template<class ValueType>
+    class single_mutex_list<T>::Handle {
     private:
-        using node_ptr = std::shared_ptr<node>;
-
         friend class single_mutex_list;
+
+        node_ptr m_node;
+
+        explicit Handle(node_ptr node) : m_node(std::move(node)) {}
 
     public:
         using value_type = T;
         using pointer = value_type *;
         using reference = value_type &;
 
-        handle() = default;
-
-        handle(const handle &other) : m_node(other.m_node) {};
+        Handle() = default;
 
         reference operator*() const noexcept {
             assert(m_node);
@@ -82,72 +171,8 @@ namespace epcpp {
 
         std::weak_ordering operator<=>(const handle &other) const { return m_node <=> other.m_node; };
 
-    private:
-        explicit handle(node_ptr node) : m_node(std::move(node)) {}
-
-        node_ptr m_node;
+        operator Handle<const ValueType>() const { return {m_node}; }
     };
-
-
-    template<class T>
-    template<class Key, class Compare>
-    auto single_mutex_list<T>::find(const Key &key, Compare compare) const -> handle {
-        std::shared_lock lock(*m_mutex);
-
-        auto node = m_head;
-
-        while (node && !(compare(node->value, key))) {
-            node = node->next;
-        }
-        return handle(std::move(node));
-    }
-
-
-    template<class T>
-    auto single_mutex_list<T>::insert(value_type e) -> std::pair<handle, bool> {
-        std::unique_lock lock(*m_mutex);
-        auto node = m_head;
-        if (node) {
-            while (node->next) {
-                if (node->value == e) {
-                    node->value = std::move(e);
-                    return {handle(std::move(node)), false};
-                }
-                node = node->next;
-            }
-            if (node->value == e) {
-                node->value = std::move(e);
-                return {handle(std::move(node)), false};
-            }
-
-            assert(!node->next);
-            node->next = std::make_shared<single_mutex_list<T>::node>(std::move(e));
-            return {handle(node->next), true};
-        } else {
-            assert(!m_head);
-            m_head = std::make_shared<single_mutex_list<T>::node>(std::move(e));
-            return {handle(m_head), true};
-        }
-    }
-
-    template<class T>
-    template<class Key, class Compare>
-    bool single_mutex_list<T>::erase(const Key &key, Compare compare) {
-        std::unique_lock lock(*m_mutex);
-
-        node_ptr prev_node;
-        auto node = m_head;
-
-        while (node && !(compare(node->value(), key))) {
-            prev_node = node;
-            node = node->m_next();
-        }
-        if (node) {
-            prev_node->m_next = node->m_next;
-            return true;
-        }
-        return false;
-    }
 }
 
 #endif //EXERCISE5_SINGLE_MUTEX_LIST_H

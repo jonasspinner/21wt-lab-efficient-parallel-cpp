@@ -18,6 +18,10 @@ namespace epcpp {
         constexpr bool is_power_of_two(std::size_t n) {
             return (n & (n - 1)) == 0;
         }
+
+        double to_ms(std::chrono::nanoseconds time) {
+            return (double)time.count() / 1e6;
+        }
     }
 }
 

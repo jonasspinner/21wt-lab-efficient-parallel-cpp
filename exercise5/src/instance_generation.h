@@ -15,6 +15,7 @@ namespace epcpp {
 
     template<class Value>
     struct Operation {
+        Operation(OperationKind kind, Value value) : kind(kind), value(value) {}
         OperationKind kind;
         Value value;
     };
@@ -44,6 +45,28 @@ namespace epcpp {
                 result.push_back(Operation<int>{OperationKind::Remove, key});
             }
         }
+    }
+
+
+    std::vector<Operation<int>> generate_operations(std::size_t num_finds, std::size_t num_modifications) {
+        std::mt19937_64 gen;
+        std::geometric_distribution<int> key_dist(0.4);
+
+        std::vector<Operation<int>> result;
+        result.reserve(num_finds + num_modifications);
+        for (std::size_t i = 0; i < num_finds; ++i) {
+            int key = key_dist(gen);
+            result.emplace_back(OperationKind::Find, key);
+        }
+        for (std::size_t i = 0; i < num_modifications / 2; ++i) {
+            int key = key_dist(gen);
+            result.emplace_back(OperationKind::Insert, key);
+            result.emplace_back(OperationKind::Remove, key);
+        }
+
+        std::shuffle(result.begin(), result.end(), gen);
+
+        return result;
     }
 }
 

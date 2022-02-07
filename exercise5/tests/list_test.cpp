@@ -3,9 +3,10 @@
 #include <barrier>
 
 #include "lists/single_mutex_list.h"
-#include "lists/leaking_atomic_list.h"
+#include "lists/_leaking_atomic_list.h"
 #include "lists/node_mutex_list.h"
-#include "lists/atomic_shared_ptr_list.h"
+#include "lists/_atomic_shared_ptr_list.h"
+#include "lists/atomic_marked_list.h"
 
 struct ValueType {
 };
@@ -36,9 +37,10 @@ class ListTest : public ::testing::Test {
 
 using ListTypes = ::testing::Types<
         epcpp::single_mutex_list<int>,
-        epcpp::leaking_atomic_list<int>,
+//        epcpp::leaking_atomic_list<int>,
         epcpp::node_mutex_list<int>,
-        epcpp::atomic_shared_ptr_list<int>
+//        epcpp::atomic_shared_ptr_list<int>,
+        epcpp::atomic_marked_list<int>
 >;
 TYPED_TEST_SUITE(ListTest, ListTypes);
 
@@ -75,6 +77,36 @@ TYPED_TEST(ListTest, InsertFind) {
         ASSERT_EQ(*handle, i);
     }
 
+}
+
+
+TYPED_TEST(ListTest, Erase) {
+    int num_elements = 100;
+
+    typename TypeParam::node_manager node_manager;
+    TypeParam list(node_manager);
+
+    for (int i = 0; i < num_elements; ++i) {
+        auto[handle, inserted] = list.insert(i);
+
+        ASSERT_TRUE(inserted);
+        ASSERT_NE(handle, list.end());
+        ASSERT_EQ(*handle, i);
+    }
+
+    for (int i = 0; i < num_elements; ++i) {
+        auto erased = list.erase(i);
+
+        ASSERT_TRUE(erased);
+    }
+
+    for (int i = 0; i < num_elements; ++i) {
+        auto[handle, inserted] = list.insert(i);
+
+        ASSERT_TRUE(inserted) << i;
+        ASSERT_NE(handle, list.end());
+        ASSERT_EQ(*handle, i);
+    }
 }
 
 
@@ -117,11 +149,123 @@ TYPED_TEST(ListTest, ConcurrentInsertFind) {
         threads.template emplace_back(work, thread_idx);
     }
 
-    for (auto &thread : threads) {
+    for (auto &thread: threads) {
         thread.join();
     }
 
 }
 
 
+TYPED_TEST(ListTest, ConcurrentInsertErase) {
 
+    std::size_t num_threads = 10;
+    std::size_t num_elements_per_thread = 100;
+    std::size_t num_find_repeats = 10;
+
+    std::barrier barrier(num_threads + 1);
+
+    typename TypeParam::node_manager node_manager;
+    TypeParam list(node_manager);
+
+    auto work = [&](std::size_t thread_idx) {
+        barrier.arrive_and_wait();
+
+        auto start = thread_idx * num_elements_per_thread;
+        auto end = (thread_idx + 1) * num_elements_per_thread;
+
+        for (std::size_t iteration = 0; iteration < num_find_repeats; ++iteration) {
+
+            for (std::size_t j = start; j < end; ++j) {
+                auto[handle, inserted] = list.insert(j);
+
+                ASSERT_TRUE(inserted) << "thread_idx " << thread_idx << " j=" << j;
+                ASSERT_NE(handle, list.end());
+                ASSERT_EQ(*handle, j);
+            }
+
+            for (std::size_t j = start; j < end; ++j) {
+                auto h = list.find(j);
+
+                ASSERT_NE(h, list.end());
+            }
+
+            for (std::size_t j = start; j < end; ++j) {
+                auto erased = list.erase(j);
+
+                ASSERT_TRUE(erased);
+            }
+
+            for (std::size_t j = start; j < end; ++j) {
+                auto h = list.find(j);
+
+                ASSERT_EQ(h, list.end()) << j << " " << *h;
+            }
+        }
+    };
+
+    std::vector<std::thread> threads;
+    for (std::size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
+        threads.emplace_back(work, thread_idx);
+    }
+
+    barrier.arrive_and_wait();
+
+    for (auto &thread: threads) {
+        thread.join();
+    }
+}
+
+
+TYPED_TEST(ListTest, ConcurrentSingleValueInsertErase) {
+
+    std::size_t num_threads = 10;
+    std::size_t num_repeats = 10000;
+
+    std::barrier barrier(num_threads + 1);
+
+    typename TypeParam::node_manager node_manager;
+    TypeParam list(node_manager);
+
+    int element = 0;
+
+    auto work = [&]() {
+        barrier.arrive_and_wait();
+        for (std::size_t iteration = 0; iteration < num_repeats; ++iteration) {
+            auto[handle, inserted] = list.insert(element);
+            ASSERT_NE(handle, list.end());
+            ASSERT_EQ(*handle, element);
+
+            auto erased = list.erase(element);
+        }
+    };
+
+    std::vector<std::thread> threads;
+    for (std::size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
+        threads.emplace_back(work);
+    }
+
+    barrier.arrive_and_wait();
+
+
+    for (auto &thread: threads) {
+        thread.join();
+    }
+}
+
+
+TEST(ListTest, ConcurrentUpdate) {
+    epcpp::atomic_marked_list<std::atomic<int>> list;
+
+    {
+        auto[h, inserted] = list.insert(2);
+
+        ASSERT_TRUE(inserted);
+        ASSERT_TRUE(h);
+        //h->fetch_add(1);
+        *h += 1;
+    }
+    {
+        auto h = list.find(2);
+        ASSERT_EQ(h, list.end());
+    }
+}

@@ -37,99 +37,95 @@ namespace epcpp {
     }
 
 
-    template<class Key, class Value, class KeyEqual = std::equal_to<Key>>
-    class StdListBucket {
-    public:
-        using key_type = Key;
-        using mapped_type = Value;
-        using value_type = std::pair<const Key, Value>;
-        using key_equal = KeyEqual;
-
-        using handle = typename std::list<std::pair<Key, Value>>::iterator;
-
-        StdListBucket() {
-            static_assert(concepts::Bucket<std::remove_reference_t<decltype(*this)>>);
-        }
-
-        std::pair<handle, bool> insert(value_type &&key_value_pair, [[maybe_unused]] std::size_t hash) {
-            std::scoped_lock lock(m_mutex);
-            auto it = m_elements.begin();
-            while (it != m_elements.end()) {
-                if (key_equal{}(it->first, key_value_pair.first)) {
-                    break;
-                }
-                ++it;
-            }
-            if (it != m_elements.end()) {
-                *it = std::move(key_value_pair);
-                return {it, false};
-            }
-            it = m_elements.insert(m_elements.end(), std::move(key_value_pair));
-            return {it, true};
-        }
-
-        handle find(const key_type& key, [[maybe_unused]] std::size_t hash) {
-            std::scoped_lock lock(m_mutex);
-            return std::find(m_elements.begin(), m_elements.end(), [&](const auto &kv) { key_equal{}(kv.first, key); });
-        }
-
-        bool erase(const Key &key, [[maybe_unused]] std::size_t hash) {
-            std::scoped_lock lock(m_mutex);
-            auto it = m_elements.begin();
-            while (it != m_elements.end()) {
-                if (key_equal{}(it->first, key)) {
-                    break;
-                }
-                ++it;
-            }
-            if (it != m_elements.end()) {
-                m_elements.erase(it);
-                return true;
-            }
-            return false;
-        }
-
-        handle end() {
-            std::scoped_lock lock(m_mutex);
-            return m_elements.end();
-        }
-
-    private:
-        std::mutex m_mutex;
-        std::list<std::pair<Key, Value>> m_elements;
-    };
-
     template<class Key, class Value, template<class> class List, class KeyEqual = std::equal_to<Key>>
-    class ListBucketT {
+    class ListBucket {
+    private:
+        struct Data;
+
+        using InnerList = List<Data>;
+        static_assert(concepts::List<InnerList>);
+
+        template<class ValueType>
+        class Handle;
+
     public:
         using key_type = Key;
         using mapped_type = Value;
         using value_type = std::pair<const Key, Value>;
         using key_equal = KeyEqual;
 
-        class handle;
+        using handle = Handle<mapped_type>;
+        using const_handle = Handle<const mapped_type>;
 
-        ListBucketT() {
+        ListBucket() {
             static_assert(concepts::Bucket<std::remove_reference_t<decltype(*this)>>);
         }
 
         std::pair<handle, bool> insert(value_type &&value, [[maybe_unused]] std::size_t hash) {
-            return m_elements.insert(std::move(value));
+            auto result = m_elements.insert(Data{hash, std::move(value)});
+            return std::make_pair(handle(std::move(result.first)), result.second);
         }
 
-        handle find(const key_type &key, [[maybe_unused]] std::size_t hash) const {
-            return m_elements.find(key);
+        handle find(const key_type &key, [[maybe_unused]] std::size_t hash) {
+            auto result = m_elements.find(key);
+            return handle(std::move(result));
         }
 
-        handle erase(const Key &key, [[maybe_unused]] std::size_t hash) {
+        const_handle find(const key_type &key, [[maybe_unused]] std::size_t hash) const {
+            auto result = m_elements.find(key);
+            return const_handle(std::move(result));
+        }
+
+        bool erase(const Key &key, [[maybe_unused]] std::size_t hash) {
             return m_elements.erase(key);
         }
 
-    private:
-        using data = std::pair<const Key, Value>;
-        static_assert(concepts::List<List<data>>);
+        handle end() { return handle(m_elements.end()); }
 
-        List<data> m_elements;
+    private:
+        InnerList m_elements;
+    };
+
+    template<class Key, class Value, template<class> class List, class KeyEqual>
+    template<class ValueType>
+    class ListBucket<Key, Value, List, KeyEqual>::Handle {
+    private:
+        using InnerHandle = std::conditional_t<std::is_const_v<ValueType>, typename InnerList::const_handle, typename InnerList::handle>;
+        friend ListBucket;
+    public:
+        Handle() = default;
+
+        value_type *operator->() const { return &m_inner_handle->value; }
+
+        value_type &operator*() const { return m_inner_handle->value; }
+
+        void reset() { m_inner_handle.reset(); }
+
+        [[nodiscard]] constexpr explicit operator bool() const { return (bool) m_inner_handle; }
+
+        [[nodiscard]] constexpr bool operator==(const Handle &other) const { return m_inner_handle == other.m_inner_handle; }
+
+        operator Handle<const value_type>() { return {m_inner_handle}; }
+
+    private:
+        explicit Handle(InnerHandle &&handle) : m_inner_handle(std::move(handle)) {}
+
+        InnerHandle m_inner_handle;
+    };
+
+    template<class Key, class Value, template<class> class List, class KeyEqual>
+    struct ListBucket<Key, Value, List, KeyEqual>::Data {
+        std::size_t hash;
+        value_type value;
+
+        [[nodiscard]] constexpr bool operator==(const Data &other) const {
+            return hash == other.hash && KeyEqual{}(value.first, other.value.first);
+        }
+
+        template<class OtherType>
+        [[nodiscard]] constexpr bool operator==(const OtherType &other) const {
+            return KeyEqual{}(value.first, other);
+        }
     };
 }
 

@@ -8,7 +8,9 @@
 #include <vector>
 
 #include "bucket.h"
-#include "lists/leaking_atomic_list.h"
+#include "lists/single_mutex_list.h"
+#include "lists/node_mutex_list.h"
+#include "lists/atomic_marked_list.h"
 #include "utils.h"
 
 namespace epcpp {
@@ -24,26 +26,50 @@ namespace epcpp {
                 typename H::key_equal key_equal,
                 typename H::handle handle
         ) {
-            { *handle } -> std::same_as<typename H::value_type&>;
-            { hash_map.find_or_insert(std::move(key_value)) } -> std::same_as<std::pair<typename H::handle, bool>>;
+            { *handle } -> std::same_as<typename H::value_type &>;
+            { hash_map.insert(std::move(key_value)) } -> std::same_as<std::pair<typename H::handle, bool>>;
             { hash_map.find(const_key) } -> std::same_as<typename H::handle>;
             { hash_map.erase(const_key) } -> std::same_as<bool>;
         };
 
     }
 
-    template<class Key, class Value, class Hash = std::hash<Key>, class Equal = std::equal_to<>>
+    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Bucket = ListBucket<Key, T, atomic_marked_list, KeyEqual>>
     class hash_map {
+    private:
+        struct InnerHash {
+            std::size_t operator()(const Key &key) const {
+                auto x = Hash{}(key);
+                // murmurhash3
+                // https://github.com/martinus/robin-hood-hashing/blob/master/src/include/robin_hood.h#L748-L759
+                x ^= x >> 33U;
+                x *= UINT64_C(0xff51afd7ed558ccd);
+                x ^= x >> 33U;
+                //x *= UINT64_C(0xc4ceb9fe1a85ec53);
+                //x ^= x >> 33U;
+                return static_cast<size_t>(x);
+            }
+        };
+
     public:
-        using value_type = std::pair<const Key, Value>;
+        using key_type = Key;
+        using mapped_type = T;
+        using value_type = std::pair<const Key, T>;
 
-        class handle;
+        using handle = typename Bucket::handle;
+        using const_handle = typename Bucket::const_handle;
 
-        hash_map(std::size_t capacity) : m_buckets(utils::next_power_of_two(capacity * 1.2)), m_mask(m_buckets.size() - 1) {
+        hash_map(std::size_t capacity) : m_buckets(utils::next_power_of_two(capacity * 1.2)),
+                                         m_mask(m_buckets.size() - 1) {
             assert(utils::is_power_of_two(m_buckets.size()));
         }
 
-        std::pair<handle, bool> find_or_insert(Key key, Value value);
+        std::pair<handle, bool> insert(value_type &&value);
+
+        std::pair<handle, bool> insert(const value_type &value) {
+            value_type copy = value;
+            return insert(std::move(copy));
+        };
 
         handle find(const Key &key);
 
@@ -54,82 +80,75 @@ namespace epcpp {
     private:
         std::size_t index(std::size_t hash) const { return hash & m_mask; }
 
-        struct data;
-        using list = leaking_atomic_list<data>;
-
-        std::vector<list> m_buckets;
+        std::vector<Bucket> m_buckets;
         std::size_t m_mask;
     };
 
-    template<class Key, class Value, class Hash, class Equal>
-    class hash_map<Key, Value, Hash, Equal>::handle {
+
+    template<class Key, class T, class Hash, class Equal, class Bucket>
+    auto hash_map<Key, T, Hash, Equal, Bucket>::insert(value_type &&value) -> std::pair<handle, bool> {
+        auto hash = InnerHash{}(value.first);
+        return m_buckets[index(hash)].insert(std::move(value), hash);
+    }
+
+    template<class Key, class T, class Hash, class Equal, class Bucket>
+    auto hash_map<Key, T, Hash, Equal, Bucket>::find(const Key &key) -> handle {
+        auto hash = InnerHash{}(key);
+        return m_buckets[index(hash)].find(key, hash);
+    }
+
+    template<class Key, class T, class Hash, class Equal, class Bucket>
+    bool hash_map<Key, T, Hash, Equal, Bucket>::erase(const Key &key) {
+        auto hash = InnerHash{}(key);
+        return m_buckets[index(hash)].erase(key, hash);
+    }
+
+    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>>
+    using hash_map_a = epcpp::hash_map<Key, T, Hash, KeyEqual, epcpp::ListBucket<Key, T, epcpp::single_mutex_list, KeyEqual>>;
+
+    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>>
+    using hash_map_b = epcpp::hash_map<Key, T, Hash, KeyEqual, epcpp::ListBucket<Key, T, epcpp::node_mutex_list, KeyEqual>>;
+
+    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>>
+    using hash_map_c = epcpp::hash_map<Key, T, Hash, KeyEqual, epcpp::ListBucket<Key, T, epcpp::atomic_marked_list, KeyEqual>>;
+
+    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Bucket = ListBucket<Key, T, atomic_marked_list, KeyEqual>>
+    class hash_map_std {
+    private:
+        using InnerMap = std::unordered_map<Key, T, Hash, KeyEqual>;
     public:
-        handle() = default;
+        using value_type = typename InnerMap::value_type;
+        using handle = typename InnerMap::iterator;
+        using const_handle = typename InnerMap::const_iterator;
 
-        value_type *operator->() const { return &m_handle->value; }
+        hash_map_std(std::size_t capacity) : m_inner_map(capacity) {}
 
-        value_type &operator*() const { return m_handle->value; }
+        std::pair<handle, bool> insert(value_type &&value) {
+            std::unique_lock lock(m_mutex);
+            return m_inner_map.insert(std::move(value));
+        }
 
-        void reset() { m_handle.reset(); }
+        std::pair<handle, bool> insert(const value_type &value) {
+            std::unique_lock lock(m_mutex);
+            return m_inner_map.insert(value);
+        }
 
-        [[nodiscard]] constexpr explicit operator bool() const { return (bool)m_handle; }
+        handle find(const Key &key) {
+            std::shared_lock lock(m_mutex);
+            return m_inner_map.find(key);
+        }
 
-        [[nodiscard]] constexpr bool operator==(const handle &other) const { return m_handle == other.m_handle; }
-        [[nodiscard]] constexpr bool operator!=(const handle &other) const { return !(*this == other); }
+        bool erase(const Key &key) {
+            std::unique_lock lock(m_mutex);
+            return m_inner_map.erase(key);
+        }
+
+        handle end() { return m_inner_map.end(); }
 
     private:
-        friend class hash_map;
-        using list_handle = typename list::handle;
-
-        handle(list_handle &&handle) : m_handle(std::move(handle)) {}
-
-        list_handle m_handle;
+        mutable std::shared_mutex m_mutex;
+        InnerMap m_inner_map;
     };
-
-    template<class Key, class Value, class Hash, class Equal>
-    struct hash_map<Key, Value, Hash, Equal>::data {
-        /*
-        data(std::size_t hash, const value_type & value) : hash(hash), value(value) {}
-        data(std::size_t hash, value_type&& value) : hash(hash), value(std::move(value)) {}
-        data(const data&) = default;
-        data(data&&) noexcept = default;
-        void operator=(data&& other) {
-            hash = other.hash;
-            value = std::move(other.value);
-        }
-         */
-        std::size_t hash;
-        value_type value;
-
-        [[nodiscard]] constexpr bool operator==(const data &other) const {
-            return hash == other.hash && Equal{}(value.first, other.value.first);
-        }
-        [[nodiscard]] constexpr bool operator==(const Key& key) const {
-            return Equal{}(value.first, key);
-        }
-    };
-
-    template<class Key, class Value, class Hash, class Equal>
-    auto hash_map<Key, Value, Hash, Equal>::find_or_insert(Key key, Value value) -> std::pair<handle, bool> {
-        auto hash = Hash{}(key);
-        auto result = m_buckets[index(hash)].insert(data{hash, std::make_pair(std::move(key), std::move(value))});
-        return {handle(std::move(result.first)), result.second};
-    }
-
-    template<class Key, class Value, class Hash, class Equal>
-    auto hash_map<Key, Value, Hash, Equal>::find(const Key &key) -> handle {
-        auto hash = Hash{}(key);
-        auto result = m_buckets[index(hash)].find(key);
-        return handle(std::move(result));
-    }
-
-    template<class Key, class Value, class Hash, class Equal>
-    bool hash_map<Key, Value, Hash, Equal>::erase(const Key &key) {
-        auto hash = Hash{}(key);
-        auto result = m_buckets[index(hash)].erase(key);
-        return result;
-    }
-
 }
 
 #endif //EXERCISE5_CONCURRENT_HASHMAP_H
