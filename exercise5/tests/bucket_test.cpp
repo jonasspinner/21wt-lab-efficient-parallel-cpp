@@ -1,6 +1,7 @@
 
 #include <gtest/gtest.h>
 
+#include "lists/single_mutex_list.h"
 #include "bucket.h"
 #include "bloom_filter.h"
 
@@ -10,9 +11,9 @@ class BucketTest : public ::testing::Test {
 };
 
 using BucketTypes = ::testing::Types<
-        epcpp::StdListBucket<int, int>,
-        epcpp::BloomFilterAdapter<epcpp::StdListBucket<int, int>>,
-        epcpp::BloomFilterAdapter<epcpp::StdListBucket<int, int>, 10>
+        epcpp::ListBucket<int, int, epcpp::single_mutex_list>,
+        epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::single_mutex_list>>,
+        epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::single_mutex_list>, 10>
 >;
 TYPED_TEST_SUITE(BucketTest, BucketTypes);
 

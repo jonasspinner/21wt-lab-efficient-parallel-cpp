@@ -10,10 +10,10 @@
 #include "list_concept.h"
 
 namespace epcpp {
-    template<class T>
+    template<class T, class Allocator = std::allocator<T>>
     class node_mutex_list {
     private:
-        struct node;
+        struct Node;
 
         template<class ValueType>
         class Handle;
@@ -24,51 +24,54 @@ namespace epcpp {
     public:
         using value_type = T;
 
+        using allocator_type = typename std::allocator_traits<Allocator>::template rebind_alloc<Node>;
+
         using handle = Handle<T>;
         using const_handle = Handle<const T>;
-
-        class node_manager {
-        };
 
         node_mutex_list() {
             static_assert(concepts::List<std::remove_reference_t<decltype(*this)>>);
         }
 
-        explicit node_mutex_list(node_manager &) : node_mutex_list() {}
-
         template<class Value>
         std::pair<handle, bool> insert(Value &&value);
 
         template<class Value>
-        handle find(const Value &value);
+        [[nodiscard]] handle find(const Value &value);
 
         template<class Value>
-        const_handle find(const Value &value) const {
-            return const_cast<node_mutex_list*>(this)->find(value);
+        [[nodiscard]] const_handle find(const Value &value) const {
+            return const_cast<node_mutex_list *>(this)->find(value);
         }
 
         template<class Value>
         bool erase(const Value &value);
 
-        handle end() { return {}; }
-        const_handle cend() const { return {}; }
-        const_handle end() const { return {}; }
+        [[nodiscard]] constexpr handle end() { return {}; }
+
+        [[nodiscard]] constexpr const_handle cend() const { return {}; }
+
+        [[nodiscard]] constexpr const_handle end() const { return {}; }
+
+        [[nodiscard]] constexpr static std::string_view name() { return "node_mutex_list"; }
 
     private:
         mutable std::shared_mutex m_head_mutex;
-        std::shared_ptr<node> m_head;
+        std::shared_ptr<Node> m_head;
+
+        allocator_type m_allocator;
     };
 
-    template<class T>
+    template<class T, class Allocator>
     template<class Value>
-    auto node_mutex_list<T>::insert(Value &&value) -> std::pair<handle, bool> {
-        std::shared_ptr<node> prev_node;
+    auto node_mutex_list<T, Allocator>::insert(Value &&value) -> std::pair<handle, bool> {
+        std::shared_ptr<Node> prev_node;
 
         m_head_mutex.lock();
         auto node = m_head;
 
         if (!node) {
-            node = std::make_shared<node_mutex_list::node>(std::forward<Value>(value));
+            node = std::allocate_shared<node_mutex_list::Node>(m_allocator, std::forward<Value>(value));
             m_head = node;
             m_head_mutex.unlock();
             return {handle(std::move(node)), true};
@@ -102,7 +105,7 @@ namespace epcpp {
         } else {
             assert(prev_node->value != value);
             assert(!prev_node->next);
-            node = std::make_shared<node_mutex_list::node>(std::forward<Value>(value));
+            node = std::allocate_shared<node_mutex_list::Node>(m_allocator, std::forward<Value>(value));
             prev_node->next = node;
             prev_node->next_mutex.unlock();
             return {handle(std::move(node)), true};
@@ -110,10 +113,10 @@ namespace epcpp {
     }
 
 
-    template<class T>
+    template<class T, class Allocator>
     template<class Value>
-    auto node_mutex_list<T>::find(const Value &value) -> handle {
-        std::shared_ptr<node> prev_node;
+    auto node_mutex_list<T, Allocator>::find(const Value &value) -> handle {
+        std::shared_ptr<Node> prev_node;
 
         m_head_mutex.lock_shared();
         auto node = m_head;
@@ -142,9 +145,9 @@ namespace epcpp {
     }
 
 
-    template<class T>
-    template<class Key>
-    bool node_mutex_list<T>::erase(const Key &key) {
+    template<class T, class Allocator>
+    template<class Value>
+    bool node_mutex_list<T, Allocator>::erase(const Value &value) {
         m_head_mutex.lock(); // (1)
 
         if (!m_head) {
@@ -153,7 +156,7 @@ namespace epcpp {
         }
 
         auto node = m_head; // (1)
-        if (compare(m_head->value, key)) {
+        if (compare(m_head->value, value)) {
             node->next_mutex.lock(); // (2)
 
             m_head = node->next; // (1) + (2)
@@ -168,7 +171,7 @@ namespace epcpp {
         auto prev_node = std::exchange(node, node->next);
 
 
-        while (node && !compare(node->value, key)) {
+        while (node && !compare(node->value, value)) {
             node->next_mutex.lock(); // (i)
             prev_node->next_mutex.unlock(); // (i-1)
 
@@ -193,28 +196,28 @@ namespace epcpp {
     }
 
 
-    template<class T>
-    struct node_mutex_list<T>::node {
-        node(const node &) = delete;
+    template<class T, class Allocator>
+    struct node_mutex_list<T, Allocator>::Node {
+        Node(const Node &) = delete;
 
-        node(node &&) = delete;
+        Node(Node &&) = delete;
 
-        template<class Value>
-        explicit node(Value &&value) : value(std::forward<Value>(value)) {}
+        template<class ...Args>
+        explicit Node(Args &&...args) : value(std::forward<Args>(args)...) {
+            static_assert(std::is_constructible_v<T, Args...>);
+        }
 
         T value;
 
         std::shared_mutex next_mutex;
-        std::shared_ptr<node> next;
-
-        friend class node_mutex_list;
+        std::shared_ptr<Node> next;
     };
 
-    template<class T>
+    template<class T, class Allocator>
     template<class ValueType>
-    class node_mutex_list<T>::Handle {
+    class node_mutex_list<T, Allocator>::Handle {
     private:
-        using node_ptr = std::shared_ptr<node>;
+        using node_ptr = std::shared_ptr<Node>;
 
         friend class node_mutex_list;
 
@@ -223,28 +226,33 @@ namespace epcpp {
         using pointer = value_type *;
         using reference = value_type &;
 
-        Handle() = default;
+        constexpr Handle() noexcept = default;
 
-        Handle(const Handle &other) : m_node(other.m_node) {};
+        constexpr Handle(const Handle &other) noexcept: m_node(other.m_node) {};
 
-        reference operator*() const noexcept {
+        constexpr Handle(Handle &&other) noexcept: m_node(std::move(other.m_node)) {};
+
+
+        [[nodiscard]] constexpr reference operator*() const noexcept {
             assert(m_node);
             return m_node->value;
         }
 
-        pointer operator->() const noexcept {
+        [[nodiscard]] constexpr pointer operator->() const noexcept {
             assert(m_node);
             return &m_node->value;
         }
 
-        bool operator==(const handle &other) const { return m_node == other.m_node; }
+        [[nodiscard]] constexpr bool operator==(const handle &other) const { return m_node == other.m_node; }
 
-        std::weak_ordering operator<=>(const handle &other) const { return m_node <=> other.m_node; };
+        [[nodiscard]] constexpr std::weak_ordering operator<=>(const handle &other) const {
+            return m_node <=> other.m_node;
+        };
 
         operator Handle<const ValueType>() { return {m_node}; }
 
     private:
-        explicit Handle(node_ptr node) : m_node(std::move(node)) {}
+        constexpr explicit Handle(node_ptr node) noexcept: m_node(std::move(node)) {}
 
         node_ptr m_node;
     };

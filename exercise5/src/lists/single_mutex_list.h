@@ -8,10 +8,10 @@
 #include "list_concept.h"
 
 namespace epcpp {
-    template<class T>
+    template<class T, class Allocator = std::allocator<T>>
     class single_mutex_list {
     private:
-        struct node;
+        struct Node;
 
         template<class ValueType>
         class Handle;
@@ -21,6 +21,8 @@ namespace epcpp {
 
     public:
         using value_type = T;
+
+        using allocator_type = typename std::allocator_traits<Allocator>::template rebind_alloc<Node>;
 
         using handle = Handle<T>;
         using const_handle = Handle<const T>;
@@ -38,33 +40,36 @@ namespace epcpp {
         std::pair<handle, bool> insert(Value &&value);
 
         template<class Value>
-        handle find(const Value &value);
+        [[nodiscard]] handle find(const Value &value);
 
         template<class Value>
-        const_handle find(const Value &value) const {
+        [[nodiscard]] const_handle find(const Value &value) const {
             return const_cast<single_mutex_list *>(this)->find(value, compare);
         }
 
         template<class Value>
         bool erase(const Value &value);
 
-        handle end() { return {}; }
+        [[nodiscard]] constexpr handle end() { return {}; }
 
-        const_handle cend() const { return {}; }
+        [[nodiscard]] constexpr const_handle cend() const { return {}; }
 
-        const_handle end() const { return {}; }
+        [[nodiscard]] constexpr const_handle end() const { return {}; }
+
+        [[nodiscard]] constexpr static std::string_view name() { return "single_mutex_list"; }
 
     private:
-        using node_ptr = std::shared_ptr<node>;
+        using node_ptr = std::shared_ptr<Node>;
 
         mutable std::shared_mutex m_mutex;
         node_ptr m_head{};
+        allocator_type m_allocator;
     };
 
 
-    template<class T>
+    template<class T, class Allocator>
     template<class Value>
-    auto single_mutex_list<T>::insert(Value &&value) -> std::pair<handle, bool> {
+    auto single_mutex_list<T, Allocator>::insert(Value &&value) -> std::pair<handle, bool> {
         std::unique_lock lock(m_mutex);
         auto node = m_head;
         if (node) {
@@ -79,19 +84,19 @@ namespace epcpp {
             }
 
             assert(!node->next);
-            node->next = std::make_shared<single_mutex_list<T>::node>(std::forward<Value>(value));
+            node->next = std::allocate_shared<Node>(m_allocator, std::forward<Value>(value));
             return {handle(node->next), true};
         } else {
             assert(!m_head);
-            m_head = std::make_shared<single_mutex_list<T>::node>(std::forward<Value>(value));
+            m_head = std::allocate_shared<Node>(m_allocator, std::forward<Value>(value));
             return {handle(m_head), true};
         }
     }
 
 
-    template<class T>
+    template<class T, class Allocator>
     template<class Value>
-    auto single_mutex_list<T>::find(const Value &value) -> handle {
+    auto single_mutex_list<T, Allocator>::find(const Value &value) -> handle {
         std::shared_lock lock(m_mutex);
 
         for (auto node = m_head; node; node = node->next) {
@@ -103,9 +108,9 @@ namespace epcpp {
     }
 
 
-    template<class T>
+    template<class T, class Allocator>
     template<class Value>
-    bool single_mutex_list<T>::erase(const Value &value) {
+    bool single_mutex_list<T, Allocator>::erase(const Value &value) {
         std::unique_lock lock(m_mutex);
 
         node_ptr prev_node;
@@ -127,22 +132,24 @@ namespace epcpp {
     }
 
 
-    template<class T>
-    struct single_mutex_list<T>::node {
-        node(const node &) = delete;
+    template<class T, class Allocator>
+    struct single_mutex_list<T, Allocator>::Node {
+        Node(const Node &) = delete;
 
-        node(node &&) = delete;
+        Node(Node &&) = delete;
 
-        template<class Value>
-        explicit node(Value &&value) : value(std::forward<Value>(value)) {}
+        template<class ...Args>
+        explicit Node(Args &&...args) : value(std::forward<Args>(args)...) {
+            static_assert(std::is_constructible_v<T, Args...>);
+        }
 
         T value;
-        std::shared_ptr<node> next;
+        std::shared_ptr<Node> next;
     };
 
-    template<class T>
+    template<class T, class Allocator>
     template<class ValueType>
-    class single_mutex_list<T>::Handle {
+    class single_mutex_list<T, Allocator>::Handle {
     private:
         friend class single_mutex_list;
 

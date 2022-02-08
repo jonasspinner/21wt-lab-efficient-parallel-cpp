@@ -3,34 +3,40 @@
 #define EXERCISE5_ATOMIC_MARKED_LIST_H
 
 #include <atomic>
+#include <memory>
 
 #include "list_concept.h"
 #include "../marked_ptr.h"
 
 
 namespace epcpp {
-    template<class T>
+    template<class T, class Allocator = std::allocator<T>>
     class atomic_marked_list {
     private:
         using Compare = std::equal_to<>;
         constexpr static Compare compare{};
+
+        template<class InnerValue>
+        struct Node;
 
         template<class ValueType>
         class Handle;
 
     public:
         using value_type = T;
+        using allocator_type = typename std::allocator_traits<Allocator>::template rebind_alloc<Node<T>>;
+
+        static_assert(std::is_same_v<typename allocator_type::value_type, Node<T>>);
 
         using handle = Handle<T>;
         using const_handle = Handle<const T>;
 
         class node_manager;
 
-        atomic_marked_list() {
+        explicit atomic_marked_list(const Allocator &alloc = Allocator()) noexcept(noexcept(Allocator()))
+                : m_node_manager(alloc) {
             static_assert(concepts::List<std::remove_reference_t<decltype(*this)>>);
         }
-
-        atomic_marked_list(node_manager &) : atomic_marked_list() {}
 
         ~atomic_marked_list();
 
@@ -38,25 +44,27 @@ namespace epcpp {
         std::pair<handle, bool> insert(Value &&value);
 
         template<class Value>
-        handle find(const Value &value);
+        [[nodiscard]] handle find(const Value &value);
 
         template<class Value>
-        const_handle find(const Value &value) const {
-            return const_cast<atomic_marked_list*>(this)->find(value);
+        [[nodiscard]] const_handle find(const Value &value) const {
+            return const_cast<atomic_marked_list *>(this)->find(value);
         }
 
         template<class Value>
         bool erase(const Value &value);
 
-        handle end() { return {}; }
+        [[nodiscard]] constexpr handle end() { return {}; }
 
-        const_handle cend() const { return {}; }
+        [[nodiscard]] constexpr const_handle cend() const { return {}; }
 
-        const_handle end() const { return cend(); }
+        [[nodiscard]] constexpr const_handle end() const { return {}; }
+
+        [[nodiscard]] constexpr bool empty() const { return m_head.load(std::memory_order_relaxed) == nullptr; }
+
+        [[nodiscard]] constexpr static std::string_view name() { return "atomic_marked_list"; }
 
     private:
-        template<class InnerValue>
-        struct Node;
         using node = Node<T>;
 
         using node_ptr = node *;
@@ -68,6 +76,7 @@ namespace epcpp {
                            marked_ptr<node> node_to_skip, marked_ptr<node> next) {
             if (prev_next_ptr) {
                 assert(!prev_next.is_marked());
+                assert(next.is_marked());
                 if (prev_next_ptr->compare_exchange_weak(prev_next, next.as_unmarked())) {
                     m_node_manager.reclaim_node(node_to_skip.get_unmarked());
                     return true;
@@ -82,15 +91,15 @@ namespace epcpp {
         }
     };
 
-    template<class T>
+    template<class T, class Allocator>
     template<class Value>
-    auto atomic_marked_list<T>::insert(Value &&value) -> std::pair<handle, bool> {
+    auto atomic_marked_list<T, Allocator>::insert(Value &&value) -> std::pair<handle, bool> {
         node_ptr new_node = m_node_manager.create_node(std::forward<Value>(value));
 
         restart:
 
         auto prev_next_ptr = &m_head;
-        marked_ptr<atomic_marked_list<T>::node> node;
+        marked_ptr<Node<T>> node;
         if (m_head.compare_exchange_weak(
                 node, new_node,
                 std::memory_order_acquire, std::memory_order_relaxed)) {
@@ -117,19 +126,24 @@ namespace epcpp {
             node = next;
         }
 
+        assert(!node);
+        assert(prev_next.get_unmarked() == node.get_unmarked() || node.is_marked());
+
         if (prev_next_ptr && prev_next_ptr->compare_exchange_weak(prev_next, new_node)) {
-            for (auto n = prev_next; n; n = n->next.load(std::memory_order_relaxed)) {
-                assert(n->next.load().is_marked());
+            for (auto n = prev_next; n;) {
+                auto next = n->next.load(std::memory_order_relaxed);
+                assert(prev_next_ptr == &m_head || next.is_marked());
                 m_node_manager.reclaim_node(n.get_unmarked());
+                n = next;
             }
             return {handle(new_node), true};
         }
         goto restart;
     }
 
-    template<class T>
+    template<class T, class Allocator>
     template<class Value>
-    auto atomic_marked_list<T>::find(const Value &value) -> handle {
+    auto atomic_marked_list<T, Allocator>::find(const Value &value) -> handle {
         marked_ptr node = m_head.load(std::memory_order_acquire);
         while (node) {
             auto next = node->next.load(std::memory_order_acquire);
@@ -141,9 +155,9 @@ namespace epcpp {
         return {};
     }
 
-    template<class T>
+    template<class T, class Allocator>
     template<class Value>
-    bool atomic_marked_list<T>::erase(const Value &value) {
+    bool atomic_marked_list<T, Allocator>::erase(const Value &value) {
         auto prev_next_ptr = &m_head;
         auto node = prev_next_ptr->load(std::memory_order_acquire);
         auto prev_next = node;
@@ -158,7 +172,7 @@ namespace epcpp {
                 if (compare(node->value, value)) {
                     while (true) {
                         if (node->next.compare_exchange_weak(next, next.as_marked())) {
-                            try_skip_node(prev_next_ptr, prev_next, node, next);
+                            try_skip_node(prev_next_ptr, prev_next, node, next.as_marked());
                             return true;
                         }
                         if (next.is_marked()) {
@@ -178,8 +192,8 @@ namespace epcpp {
     }
 
 
-    template<class T>
-    atomic_marked_list<T>::~atomic_marked_list() {
+    template<class T, class Allocator>
+    atomic_marked_list<T, Allocator>::~atomic_marked_list() {
         for (auto n = m_head.load(std::memory_order_relaxed); n;) {
             auto next = n->next.load(std::memory_order_relaxed);
             delete n.get();
@@ -187,16 +201,21 @@ namespace epcpp {
         }
     }
 
-    template<class T>
-    class atomic_marked_list<T>::node_manager {
+    template<class T, class Allocator>
+    class atomic_marked_list<T, Allocator>::node_manager {
     public:
+        explicit node_manager(const Allocator &alloc) noexcept: m_allocator(alloc) {}
+
         template<class Value>
-        node_ptr create_node(Value &&value) {
-            return new node(std::forward<Value>(value));
+        [[nodiscard]] node_ptr create_node(Value &&value) {
+            auto ptr = m_allocator.allocate(1);
+            std::construct_at(ptr, std::forward<Value>(value));
+            return ptr;
         }
 
         void destroy_node(node_ptr node) {
-            delete node;
+            std::destroy_at(node);
+            m_allocator.deallocate(node, 1);
         }
 
         void reclaim_node(node_ptr node) {
@@ -226,69 +245,72 @@ namespace epcpp {
             elements.erase(elements_end, elements.end());
 
             for (auto n: elements) {
-                delete n;
+                destroy_node(n);
             }
         }
 
     private:
         std::atomic<marked_ptr<Node<Node<T> *>>> m_reclaimed;
+        allocator_type m_allocator;
     };
 
-    template<class T>
+    template<class T, class Allocator>
     template<class InnerValue>
-    struct atomic_marked_list<T>::Node {
+    struct atomic_marked_list<T, Allocator>::Node {
         Node(const Node &) = delete;
 
         Node(Node &&) = delete;
 
-        template<class Value>
-        explicit Node(Value &&value) : value(std::forward<Value>(value)) {}
+        template<class ...Args>
+        explicit Node(Args &&...args) : value(std::forward<Args>(args)...) {
+            static_assert(std::is_constructible_v<InnerValue, Args...>);
+        }
 
         InnerValue value;
         std::atomic<marked_ptr<Node>> next{nullptr};
     };
 
 
-    template<class T>
+    template<class T, class Allocator>
     template<class ValueType>
-    class atomic_marked_list<T>::Handle {
+    class atomic_marked_list<T, Allocator>::Handle {
     public:
         using value_type = ValueType;
         using pointer = value_type *;
         using reference = value_type &;
 
-        Handle() = default;
+        constexpr Handle() noexcept = default;
 
-        Handle(const Handle &other) : m_node(other.m_node) {};
+        constexpr Handle(const Handle &other) noexcept: m_node(other.m_node) {};
 
-        Handle(Handle &&other) noexcept: m_node(std::move(other.m_node)) {};
+        constexpr Handle(Handle &&other) noexcept: m_node(std::move(other.m_node)) {};
 
-        reference operator*() const noexcept {
+        [[nodiscard]] constexpr reference operator*() const noexcept {
             assert(m_node);
             return m_node->value;
         }
 
-        pointer operator->() const noexcept {
+        [[nodiscard]] constexpr pointer operator->() const noexcept {
             assert(m_node);
             return &m_node->value;
         }
 
-        void reset() { m_node = nullptr; }
+        constexpr void reset() { m_node = nullptr; }
 
         [[nodiscard]] constexpr explicit operator bool() const { return (bool) m_node; }
 
-        bool operator==(const Handle &other) const { return m_node == other.m_node; }
+        [[nodiscard]] constexpr bool operator==(const Handle &other) const { return m_node == other.m_node; }
 
-        std::weak_ordering operator<=>(const Handle &other) const { return m_node <=> other.m_node; };
+        [[nodiscard]] constexpr std::weak_ordering operator<=>(const Handle &other) const { return m_node <=> other.m_node; };
 
         operator Handle<const ValueType>() const { return {m_node}; }
 
     private:
         friend class atomic_marked_list;
 
-        explicit Handle(node *node) : m_node(std::move(node)) {}
+        constexpr explicit Handle(Node<T> *node) noexcept: m_node(std::move(node)) {}
 
-        node_ptr m_node;
+        Node<T> *m_node;
     };
 }
 

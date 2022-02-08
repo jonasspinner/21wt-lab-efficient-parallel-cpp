@@ -45,8 +45,7 @@ using ListTypes = ::testing::Types<
 TYPED_TEST_SUITE(ListTest, ListTypes);
 
 TYPED_TEST(ListTest, InsertFind) {
-    typename TypeParam::node_manager node_manager;
-    TypeParam list(node_manager);
+    TypeParam list;
 
     for (int i = 0; i < 10; ++i) {
         auto[handle, inserted] = list.insert(i);
@@ -83,8 +82,7 @@ TYPED_TEST(ListTest, InsertFind) {
 TYPED_TEST(ListTest, Erase) {
     int num_elements = 100;
 
-    typename TypeParam::node_manager node_manager;
-    TypeParam list(node_manager);
+    TypeParam list;
 
     for (int i = 0; i < num_elements; ++i) {
         auto[handle, inserted] = list.insert(i);
@@ -118,8 +116,7 @@ TYPED_TEST(ListTest, ConcurrentInsertFind) {
 
     std::barrier barrier(num_threads);
 
-    typename TypeParam::node_manager node_manager;
-    TypeParam list(node_manager);
+    TypeParam list;
 
     auto work = [&](std::size_t thread_idx) {
         barrier.arrive_and_wait();
@@ -164,8 +161,7 @@ TYPED_TEST(ListTest, ConcurrentInsertErase) {
 
     std::barrier barrier(num_threads + 1);
 
-    typename TypeParam::node_manager node_manager;
-    TypeParam list(node_manager);
+    TypeParam list;
 
     auto work = [&](std::size_t thread_idx) {
         barrier.arrive_and_wait();
@@ -223,8 +219,7 @@ TYPED_TEST(ListTest, ConcurrentSingleValueInsertErase) {
 
     std::barrier barrier(num_threads + 1);
 
-    typename TypeParam::node_manager node_manager;
-    TypeParam list(node_manager);
+    TypeParam list;
 
     int element = 0;
 
@@ -235,7 +230,7 @@ TYPED_TEST(ListTest, ConcurrentSingleValueInsertErase) {
             ASSERT_NE(handle, list.end());
             ASSERT_EQ(*handle, element);
 
-            auto erased = list.erase(element);
+            [[maybe_unused]] auto erased = list.erase(element);
         }
     };
 
@@ -261,7 +256,7 @@ TEST(ListTest, ConcurrentUpdate) {
 
         ASSERT_TRUE(inserted);
         ASSERT_TRUE(h);
-        //h->fetch_add(1);
+        h->fetch_add(1);
         *h += 1;
     }
     {
