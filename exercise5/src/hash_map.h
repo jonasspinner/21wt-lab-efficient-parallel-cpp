@@ -6,6 +6,7 @@
 #include <list>
 #include <mutex>
 #include <vector>
+#include <unordered_map>
 
 #include "bucket.h"
 #include "lists/single_mutex_list.h"
@@ -34,8 +35,8 @@ namespace epcpp {
 
     }
 
-    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Bucket = ListBucket<Key, T, atomic_marked_list, KeyEqual>>
-    class hash_map {
+    template<class Key, class T, class Hash, concepts::Bucket Bucket>
+    class HashMap {
     private:
         struct InnerHash {
             std::size_t operator()(const Key &key) const {
@@ -56,12 +57,27 @@ namespace epcpp {
         using mapped_type = T;
         using value_type = std::pair<const Key, T>;
 
+        using allocator_type = typename Bucket::allocator_type;
+
         using handle = typename Bucket::handle;
         using const_handle = typename Bucket::const_handle;
 
-        hash_map(std::size_t capacity) : m_buckets(utils::next_power_of_two(capacity * 1.2)),
-                                         m_mask(m_buckets.size() - 1) {
-            assert(utils::is_power_of_two(m_buckets.size()));
+        HashMap(std::size_t capacity) : HashMap(capacity, allocator_type()) {}
+
+        HashMap(std::size_t capacity, const allocator_type &alloc) : m_allocator(alloc), m_capacity(utils::next_power_of_two(capacity * 1.2)), m_mask(m_capacity - 1) {
+            m_buckets = std::allocator<Bucket>{}.allocate(m_capacity);
+            for (std::size_t i = 0; i < m_capacity; ++i) {
+                std::construct_at(&m_buckets[i], m_allocator);
+            }
+            assert(utils::is_power_of_two(m_capacity));
+        }
+
+        ~HashMap() {
+            for (std::size_t i = 0; i < m_capacity; ++i) {
+                std::destroy_at(&m_buckets[i]);
+            }
+            std::allocator<Bucket>{}.deallocate(m_buckets, m_capacity);
+            m_buckets = nullptr;
         }
 
         std::pair<handle, bool> insert(value_type &&value);
@@ -80,42 +96,47 @@ namespace epcpp {
     private:
         std::size_t index(std::size_t hash) const { return hash & m_mask; }
 
-        std::vector<Bucket> m_buckets;
+        allocator_type m_allocator;
+        std::size_t m_capacity;
         std::size_t m_mask;
+        Bucket* m_buckets;
     };
 
 
-    template<class Key, class T, class Hash, class Equal, class Bucket>
-    auto hash_map<Key, T, Hash, Equal, Bucket>::insert(value_type &&value) -> std::pair<handle, bool> {
+    template<class Key, class T, class Hash, concepts::Bucket Bucket>
+    auto HashMap<Key, T, Hash, Bucket>::insert(value_type &&value) -> std::pair<handle, bool> {
         auto hash = InnerHash{}(value.first);
         return m_buckets[index(hash)].insert(std::move(value), hash);
     }
 
-    template<class Key, class T, class Hash, class Equal, class Bucket>
-    auto hash_map<Key, T, Hash, Equal, Bucket>::find(const Key &key) -> handle {
+    template<class Key, class T, class Hash, concepts::Bucket Bucket>
+    auto HashMap<Key, T, Hash, Bucket>::find(const Key &key) -> handle {
         auto hash = InnerHash{}(key);
         return m_buckets[index(hash)].find(key, hash);
     }
 
-    template<class Key, class T, class Hash, class Equal, class Bucket>
-    bool hash_map<Key, T, Hash, Equal, Bucket>::erase(const Key &key) {
+    template<class Key, class T, class Hash, concepts::Bucket Bucket>
+    bool HashMap<Key, T, Hash, Bucket>::erase(const Key &key) {
         auto hash = InnerHash{}(key);
         return m_buckets[index(hash)].erase(key, hash);
     }
 
-    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>>
-    using hash_map_a = epcpp::hash_map<Key, T, Hash, KeyEqual, epcpp::ListBucket<Key, T, epcpp::single_mutex_list, KeyEqual>>;
+    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
+    using hash_map = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::single_mutex_list, KeyEqual, Allocator, false>>;
 
-    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>>
-    using hash_map_b = epcpp::hash_map<Key, T, Hash, KeyEqual, epcpp::ListBucket<Key, T, epcpp::node_mutex_list, KeyEqual>>;
+    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
+    using hash_map_a = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::single_mutex_list, KeyEqual, Allocator, false>>;
 
-    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>>
-    using hash_map_c = epcpp::hash_map<Key, T, Hash, KeyEqual, epcpp::ListBucket<Key, T, epcpp::atomic_marked_list, KeyEqual>>;
+    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
+    using hash_map_b = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::node_mutex_list, KeyEqual, Allocator, false>>;
 
-    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Bucket = ListBucket<Key, T, atomic_marked_list, KeyEqual>>
+    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
+    using hash_map_c = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::atomic_marked_list, KeyEqual, Allocator, false>>;
+
+    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
     class hash_map_std {
     private:
-        using InnerMap = std::unordered_map<Key, T, Hash, KeyEqual>;
+        using InnerMap = std::unordered_map<Key, T, Hash, KeyEqual, Allocator>;
     public:
         using value_type = typename InnerMap::value_type;
         using handle = typename InnerMap::iterator;

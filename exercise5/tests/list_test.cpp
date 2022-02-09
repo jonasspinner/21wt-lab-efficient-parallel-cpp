@@ -7,6 +7,7 @@
 #include "lists/node_mutex_list.h"
 #include "lists/_atomic_shared_ptr_list.h"
 #include "lists/atomic_marked_list.h"
+#include "utils.h"
 
 struct ValueType {
 };
@@ -172,7 +173,7 @@ TYPED_TEST(ListTest, ConcurrentInsertErase) {
         for (std::size_t iteration = 0; iteration < num_find_repeats; ++iteration) {
 
             for (std::size_t j = start; j < end; ++j) {
-                auto[handle, inserted] = list.insert(j);
+                auto[handle, inserted] = list.insert((int)j);
 
                 ASSERT_TRUE(inserted) << "thread_idx " << thread_idx << " j=" << j;
                 ASSERT_NE(handle, list.end());
@@ -180,19 +181,19 @@ TYPED_TEST(ListTest, ConcurrentInsertErase) {
             }
 
             for (std::size_t j = start; j < end; ++j) {
-                auto h = list.find(j);
+                auto h = list.find((int)j);
 
                 ASSERT_NE(h, list.end());
             }
 
             for (std::size_t j = start; j < end; ++j) {
-                auto erased = list.erase(j);
+                auto erased = list.erase((int)j);
 
                 ASSERT_TRUE(erased);
             }
 
             for (std::size_t j = start; j < end; ++j) {
-                auto h = list.find(j);
+                auto h = list.find((int)j);
 
                 ASSERT_EQ(h, list.end()) << j << " " << *h;
             }
@@ -262,5 +263,69 @@ TEST(ListTest, ConcurrentUpdate) {
     {
         auto h = list.find(2);
         ASSERT_EQ(h, list.end());
+    }
+}
+
+
+
+template<class List>
+class CustomAllocatorListTest : public ::testing::Test {
+};
+
+using CustomAllocatorListTypes = ::testing::Types<
+        epcpp::single_mutex_list<std::array<std::size_t, 64>, epcpp::utils::debug_allocator::CountingAllocator<std::array<std::size_t, 64>>>,
+        epcpp::node_mutex_list<std::array<std::size_t, 64>, epcpp::utils::debug_allocator::CountingAllocator<std::array<std::size_t, 64>>>,
+        epcpp::atomic_marked_list<std::array<std::size_t, 64>, epcpp::utils::debug_allocator::CountingAllocator<std::array<std::size_t, 64>>>
+>;
+TYPED_TEST_SUITE(CustomAllocatorListTest, CustomAllocatorListTypes);
+
+TYPED_TEST(CustomAllocatorListTest, CustomAllocator) {
+    using Allocator = epcpp::utils::debug_allocator::CountingAllocator<std::array<std::size_t, 64>>;
+
+    std::array<std::size_t, 64> element{};
+
+    Allocator alloc;
+    {
+        TypeParam list(alloc);
+
+        ASSERT_EQ(alloc.counts().num_allocate, 0);
+        ASSERT_EQ(alloc.counts().num_deallocate, 0);
+
+        auto[h1, inserted] = list.insert(element);
+        ASSERT_NE(h1, list.end());
+        ASSERT_EQ(*h1, element);
+
+        ASSERT_EQ(alloc.counts().num_allocate, 1);
+
+        auto h2 = list.find(element);
+        ASSERT_NE(h2, list.end());
+        ASSERT_EQ(*h2, element);
+
+        auto erased = list.erase(element);
+        ASSERT_TRUE(erased);
+    }
+    ASSERT_EQ(alloc.counts().num_allocate, 1);
+    ASSERT_EQ(alloc.counts().num_deallocate, 1);
+}
+
+TYPED_TEST(CustomAllocatorListTest, InVector) {
+    using Allocator = epcpp::utils::debug_allocator::CountingAllocator<std::array<std::size_t, 64>>;
+
+    std::array<std::size_t, 64> element{};
+
+    Allocator alloc;
+
+    std::size_t num_lists = 16;
+    {
+        TypeParam * vec = std::allocator<TypeParam>{}.allocate(num_lists);
+
+        for (std::size_t i = 0; i < num_lists; ++i) {
+            std::construct_at(&vec[i], alloc);
+        }
+
+        for (std::size_t i = 0; i < num_lists; ++i) {
+            ASSERT_TRUE(vec[i].empty());
+            ASSERT_EQ(vec[i].find(element), vec[i].end());
+        }
     }
 }

@@ -25,10 +25,16 @@ namespace epcpp {
         using value_type = typename BucketBase::value_type;
         using key_equal = typename BucketBase::key_equal;
 
+        using allocator_type = typename BucketBase::allocator_type;
+
         using handle = typename BucketBase::handle;
         using const_handle = typename BucketBase::const_handle;
 
         BloomFilterAdapter() {
+            static_assert(concepts::Bucket<std::remove_reference_t<decltype(*this)>>);
+        }
+
+        explicit BloomFilterAdapter(const allocator_type &alloc) : m_bucket(alloc) {
             static_assert(concepts::Bucket<std::remove_reference_t<decltype(*this)>>);
         }
 

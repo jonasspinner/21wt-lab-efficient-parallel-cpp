@@ -10,12 +10,13 @@ namespace epcpp {
     enum class OperationKind {
         Insert,
         Find,
-        Remove
+        Erase
     };
 
     template<class Value>
     struct Operation {
         Operation(OperationKind kind, Value value) : kind(kind), value(value) {}
+
         OperationKind kind;
         Value value;
     };
@@ -42,9 +43,10 @@ namespace epcpp {
             } else if (insert_vs_remove_dist(gen)) {
                 result.push_back(Operation<int>{OperationKind::Insert, key});
             } else {
-                result.push_back(Operation<int>{OperationKind::Remove, key});
+                result.push_back(Operation<int>{OperationKind::Erase, key});
             }
         }
+        return result;
     }
 
 
@@ -61,13 +63,71 @@ namespace epcpp {
         for (std::size_t i = 0; i < num_modifications / 2; ++i) {
             int key = key_dist(gen);
             result.emplace_back(OperationKind::Insert, key);
-            result.emplace_back(OperationKind::Remove, key);
+            result.emplace_back(OperationKind::Erase, key);
         }
 
         std::shuffle(result.begin(), result.end(), gen);
 
         return result;
     }
+
+    class successful_find_benchmark {
+    public:
+        constexpr static std::string_view name() { return "successful_find"; }
+
+        std::pair<std::vector<Operation<int>>, std::vector<Operation<int>>>
+        generate(std::size_t num_elements, std::size_t num_queries) {
+            std::vector<Operation<int>> setup;
+            std::vector<Operation<int>> queries;
+
+            for (std::size_t i = 0; i < num_elements; ++i) {
+                int key = i;
+                setup.emplace_back(OperationKind::Insert, key);
+            }
+
+            std::mt19937_64 gen;
+            std::uniform_int_distribution<int> key_dist(0, num_elements - 1);
+
+            for (std::size_t i = 0; i < num_queries; ++i) {
+                int key = key_dist(gen);
+                queries.emplace_back(OperationKind::Find, key);
+            }
+
+            std::shuffle(setup.begin(), setup.end(), gen);
+            std::shuffle(queries.begin(), queries.end(), gen);
+
+            return {setup, queries};
+        }
+    };
+
+    class unsuccessful_find_benchmark {
+    public:
+        constexpr static std::string_view name() { return "unsuccessful_find"; }
+
+        std::pair<std::vector<Operation<int>>, std::vector<Operation<int>>>
+        generate(std::size_t num_elements, std::size_t num_queries) {
+            std::vector<Operation<int>> setup;
+            std::vector<Operation<int>> queries;
+
+            for (std::size_t i = 0; i < num_elements; ++i) {
+                int key = i;
+                setup.emplace_back(OperationKind::Insert, key);
+            }
+
+            std::mt19937_64 gen;
+            std::uniform_int_distribution<int> key_dist(num_elements, 2 * num_elements - 1);
+
+            for (std::size_t i = 0; i < num_queries; ++i) {
+                int key = key_dist(gen);
+                queries.emplace_back(OperationKind::Find, key);
+            }
+
+            std::shuffle(setup.begin(), setup.end(), gen);
+            std::shuffle(queries.begin(), queries.end(), gen);
+
+            return {setup, queries};
+        }
+    };
 }
 
 std::ostream &operator<<(std::ostream &os, epcpp::OperationKind kind) {
@@ -76,8 +136,8 @@ std::ostream &operator<<(std::ostream &os, epcpp::OperationKind kind) {
         os << "Find";
     } else if (kind == OperationKind::Insert) {
         os << "Insert";
-    } else if (kind == OperationKind::Remove) {
-        os << "Remove";
+    } else if (kind == OperationKind::Erase) {
+        os << "Erase";
     } else {
         os.setstate(std::ios_base::failbit);
     }
@@ -92,20 +152,20 @@ std::istream &operator>>(std::istream &is, epcpp::OperationKind &kind) {
         kind = OperationKind::Find;
     } else if (s == "Insert") {
         kind = OperationKind::Insert;
-    } else if (s == "Remove") {
-        kind = OperationKind::Remove;
+    } else if (s == "Erase") {
+        kind = OperationKind::Erase;
     } else {
         is.setstate(std::ios_base::failbit);
     }
     return is;
 }
 
-template <class Value>
+template<class Value>
 std::ostream &operator<<(std::ostream &os, epcpp::Operation<Value> operation) {
     return os << operation.kind << " " << operation.value;
 }
 
-template <class Value>
+template<class Value>
 std::istream &operator>>(std::istream &is, epcpp::Operation<Value> &operation) {
     return is >> operation.kind >> operation.value;
 }

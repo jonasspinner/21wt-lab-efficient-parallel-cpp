@@ -29,7 +29,7 @@ namespace epcpp {
         using handle = Handle<T>;
         using const_handle = Handle<const T>;
 
-        node_mutex_list() {
+        explicit node_mutex_list(const Allocator& alloc = Allocator()) : m_allocator(alloc) {
             static_assert(concepts::List<std::remove_reference_t<decltype(*this)>>);
         }
 
@@ -52,6 +52,11 @@ namespace epcpp {
         [[nodiscard]] constexpr const_handle cend() const { return {}; }
 
         [[nodiscard]] constexpr const_handle end() const { return {}; }
+
+        [[nodiscard]] bool empty() const {
+            std::shared_lock lock(m_head_mutex);
+            return m_head == nullptr;
+        }
 
         [[nodiscard]] constexpr static std::string_view name() { return "node_mutex_list"; }
 

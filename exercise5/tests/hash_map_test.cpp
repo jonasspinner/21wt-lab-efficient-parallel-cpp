@@ -5,7 +5,6 @@
 
 #include "hash_map.h"
 #include "bloom_filter.h"
-#include "lists/single_mutex_list.h"
 
 
 template<class HashMap>
@@ -14,9 +13,9 @@ class HashMapTest : public ::testing::Test {
 
 using HashMapTypes = ::testing::Types<
         epcpp::hash_map<int, int>,
-        epcpp::hash_map<int, int, std::hash<int>, std::equal_to<>, epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::atomic_marked_list, std::equal_to<>>, 0>>,
-        epcpp::hash_map<int, int, std::hash<int>, std::equal_to<>, epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::atomic_marked_list, std::equal_to<>>>>,
-        epcpp::hash_map<int, int, std::hash<int>, std::equal_to<>, epcpp::ListBucket<int, int, epcpp::single_mutex_list, std::equal_to<>>>,
+        epcpp::HashMap<int, int, std::hash<int>, epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::atomic_marked_list, std::equal_to<>, std::allocator<std::pair<const int, int>>, false>>>,
+        epcpp::HashMap<int, int, std::hash<int>, epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::atomic_marked_list, std::equal_to<>, std::allocator<std::pair<const int, int>>, false>>>,
+        epcpp::HashMap<int, int, std::hash<int>, epcpp::ListBucket<int, int, epcpp::single_mutex_list, std::equal_to<>, std::allocator<std::pair<const int, int>>, false>>,
         epcpp::hash_map_a<int, int>,
         epcpp::hash_map_b<int, int>,
         epcpp::hash_map_c<int, int>,
@@ -161,4 +160,49 @@ TYPED_TEST(HashMapTest, ConcurrentInsertErase) {
     for (auto &thread: threads) {
         thread.join();
     }
+}
+
+
+template<class List>
+class CustomAllocatorHashMapTest : public ::testing::Test {
+};
+
+using CustomAllocatorHashMapTypes = ::testing::Types<
+        epcpp::hash_map_a<std::string, std::size_t, std::hash<std::string>, std::equal_to<>, epcpp::utils::debug_allocator::CountingAllocator<std::pair<const std::string, std::size_t>>>,
+        epcpp::hash_map_b<std::string, std::size_t, std::hash<std::string>, std::equal_to<>, epcpp::utils::debug_allocator::CountingAllocator<std::pair<const std::string, std::size_t>>>,
+        epcpp::hash_map_c<std::string, std::size_t, std::hash<std::string>, std::equal_to<>, epcpp::utils::debug_allocator::CountingAllocator<std::pair<const std::string, std::size_t>>>
+>;
+TYPED_TEST_SUITE(CustomAllocatorHashMapTest, CustomAllocatorHashMapTypes);
+
+
+TYPED_TEST(CustomAllocatorHashMapTest, CustomAllocator) {
+    using Allocator = typename TypeParam::allocator_type;
+
+
+    std::pair<std::string, std::size_t> element;
+    Allocator alloc;
+
+    {
+        TypeParam map(10, alloc);
+
+        ASSERT_EQ(alloc.counts().num_allocate, 0);
+        ASSERT_EQ(alloc.counts().num_deallocate, 0);
+
+        auto[h1, inserted] = map.insert(element);
+        ASSERT_NE(h1, map.end());
+        ASSERT_EQ(h1->first, element.first);
+        ASSERT_EQ(h1->second, element.second);
+
+        ASSERT_EQ(alloc.counts().num_allocate, 1);
+
+        auto h2 = map.find(element.first);
+        ASSERT_NE(h2, map.end());
+        ASSERT_EQ(h1->first, element.first);
+        ASSERT_EQ(h1->second, element.second);
+
+        auto erased = map.erase(element.first);
+        ASSERT_TRUE(erased);
+    }
+    ASSERT_EQ(alloc.counts().num_allocate, 1);
+    ASSERT_EQ(alloc.counts().num_deallocate, 1);
 }

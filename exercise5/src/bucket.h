@@ -37,12 +37,15 @@ namespace epcpp {
     }
 
 
-    template<class Key, class Value, template<class> class List, class KeyEqual = std::equal_to<Key>>
+    template<class Key, class T, template<class, class> class List, class KeyEqual, class Allocator, bool EnableDataWithHash>
     class ListBucket {
     private:
-        struct Data;
+        struct DataWithHash;
+        struct DataWithoutHash;
+        using Data = std::conditional_t<EnableDataWithHash, DataWithHash, DataWithoutHash>;
 
-        using InnerList = List<Data>;
+        using DataAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<Data>;
+        using InnerList = List<Data, DataAllocator>;
         static_assert(concepts::List<InnerList>);
 
         template<class ValueType>
@@ -50,9 +53,11 @@ namespace epcpp {
 
     public:
         using key_type = Key;
-        using mapped_type = Value;
-        using value_type = std::pair<const Key, Value>;
+        using mapped_type = T;
+        using value_type = std::pair<const Key, T>;
         using key_equal = KeyEqual;
+
+        using allocator_type = Allocator;
 
         using handle = Handle<mapped_type>;
         using const_handle = Handle<const mapped_type>;
@@ -61,34 +66,46 @@ namespace epcpp {
             static_assert(concepts::Bucket<std::remove_reference_t<decltype(*this)>>);
         }
 
+        explicit ListBucket(const Allocator &alloc) : m_inner_list(DataAllocator(alloc)) {
+            static_assert(concepts::Bucket<std::remove_reference_t<decltype(*this)>>);
+        }
+
+        /**
+         * WARNING: Not thread-safe.
+         */
+        ListBucket &operator=(ListBucket &&other) noexcept {
+            if (&other == this) return *this;
+            m_inner_list = std::move(other.m_inner_list);
+        }
+
         std::pair<handle, bool> insert(value_type &&value, [[maybe_unused]] std::size_t hash) {
-            auto result = m_elements.insert(Data{hash, std::move(value)});
+            auto result = m_inner_list.insert(Data{hash, std::move(value)});
             return std::make_pair(handle(std::move(result.first)), result.second);
         }
 
         handle find(const key_type &key, [[maybe_unused]] std::size_t hash) {
-            auto result = m_elements.find(key);
+            auto result = m_inner_list.find(key);
             return handle(std::move(result));
         }
 
         const_handle find(const key_type &key, [[maybe_unused]] std::size_t hash) const {
-            auto result = m_elements.find(key);
+            auto result = m_inner_list.find(key);
             return const_handle(std::move(result));
         }
 
         bool erase(const Key &key, [[maybe_unused]] std::size_t hash) {
-            return m_elements.erase(key);
+            return m_inner_list.erase(key);
         }
 
-        handle end() { return handle(m_elements.end()); }
+        handle end() { return handle(m_inner_list.end()); }
 
     private:
-        InnerList m_elements;
+        InnerList m_inner_list;
     };
 
-    template<class Key, class Value, template<class> class List, class KeyEqual>
+    template<class Key, class Value, template<class, class> class List, class KeyEqual, class Allocator, bool EnableDataWithHash>
     template<class ValueType>
-    class ListBucket<Key, Value, List, KeyEqual>::Handle {
+    class ListBucket<Key, Value, List, KeyEqual, Allocator, EnableDataWithHash>::Handle {
     private:
         using InnerHandle = std::conditional_t<std::is_const_v<ValueType>, typename InnerList::const_handle, typename InnerList::handle>;
         friend ListBucket;
@@ -103,7 +120,9 @@ namespace epcpp {
 
         [[nodiscard]] constexpr explicit operator bool() const { return (bool) m_inner_handle; }
 
-        [[nodiscard]] constexpr bool operator==(const Handle &other) const { return m_inner_handle == other.m_inner_handle; }
+        [[nodiscard]] constexpr bool operator==(const Handle &other) const {
+            return m_inner_handle == other.m_inner_handle;
+        }
 
         operator Handle<const value_type>() { return {m_inner_handle}; }
 
@@ -113,13 +132,32 @@ namespace epcpp {
         InnerHandle m_inner_handle;
     };
 
-    template<class Key, class Value, template<class> class List, class KeyEqual>
-    struct ListBucket<Key, Value, List, KeyEqual>::Data {
+    template<class Key, class Value, template<class, class> class List, class KeyEqual, class Allocator, bool EnableDataWithHash>
+    struct ListBucket<Key, Value, List, KeyEqual, Allocator, EnableDataWithHash>::DataWithHash {
+        explicit DataWithHash(std::size_t hash, value_type &&value) : hash(hash), value(std::move(value)) {}
+
         std::size_t hash;
         value_type value;
 
-        [[nodiscard]] constexpr bool operator==(const Data &other) const {
+        [[nodiscard]] constexpr bool operator==(const DataWithHash &other) const {
             return hash == other.hash && KeyEqual{}(value.first, other.value.first);
+        }
+
+        template<class OtherType>
+        [[nodiscard]] constexpr bool operator==(const OtherType &other) const {
+            return KeyEqual{}(value.first, other);
+        }
+    };
+
+
+    template<class Key, class Value, template<class, class> class List, class KeyEqual, class Allocator, bool EnableDataWithHash>
+    struct ListBucket<Key, Value, List, KeyEqual, Allocator, EnableDataWithHash>::DataWithoutHash {
+        explicit DataWithoutHash(std::size_t, value_type &&value) : value(std::move(value)) {}
+
+        value_type value;
+
+        [[nodiscard]] constexpr bool operator==(const DataWithoutHash &other) const {
+            return KeyEqual{}(value.first, other.value.first);
         }
 
         template<class OtherType>

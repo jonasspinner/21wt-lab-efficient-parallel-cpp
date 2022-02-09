@@ -19,22 +19,18 @@ namespace epcpp {
         using Compare = std::equal_to<>;
         constexpr static Compare compare{};
 
+        using NodeAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<Node>;
     public:
         using value_type = T;
 
-        using allocator_type = typename std::allocator_traits<Allocator>::template rebind_alloc<Node>;
+        using allocator_type = Allocator;
 
         using handle = Handle<T>;
         using const_handle = Handle<const T>;
 
-        class node_manager {
-        };
-
-        single_mutex_list() {
+        explicit single_mutex_list(const Allocator &alloc = Allocator()) : m_allocator(alloc) {
             static_assert(concepts::List<std::remove_reference_t<decltype(*this)>>);
         }
-
-        explicit single_mutex_list(node_manager &) : single_mutex_list() {}
 
         template<class Value>
         std::pair<handle, bool> insert(Value &&value);
@@ -56,6 +52,11 @@ namespace epcpp {
 
         [[nodiscard]] constexpr const_handle end() const { return {}; }
 
+        [[nodiscard]] bool empty() const {
+            std::shared_lock lock(m_mutex);
+            return m_head == nullptr;
+        }
+
         [[nodiscard]] constexpr static std::string_view name() { return "single_mutex_list"; }
 
     private:
@@ -63,7 +64,8 @@ namespace epcpp {
 
         mutable std::shared_mutex m_mutex;
         node_ptr m_head{};
-        allocator_type m_allocator;
+
+        NodeAllocator m_allocator;
     };
 
 

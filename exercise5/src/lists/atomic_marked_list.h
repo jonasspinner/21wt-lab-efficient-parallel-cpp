@@ -24,9 +24,9 @@ namespace epcpp {
 
     public:
         using value_type = T;
-        using allocator_type = typename std::allocator_traits<Allocator>::template rebind_alloc<Node<T>>;
+        using allocator_type = Allocator;
 
-        static_assert(std::is_same_v<typename allocator_type::value_type, Node<T>>);
+        static_assert(std::is_same_v<typename Allocator::value_type, T>);
 
         using handle = Handle<T>;
         using const_handle = Handle<const T>;
@@ -60,7 +60,7 @@ namespace epcpp {
 
         [[nodiscard]] constexpr const_handle end() const { return {}; }
 
-        [[nodiscard]] constexpr bool empty() const { return m_head.load(std::memory_order_relaxed) == nullptr; }
+        [[nodiscard]] constexpr bool empty() const { return m_head.load(std::memory_order_relaxed).get() == nullptr; }
 
         [[nodiscard]] constexpr static std::string_view name() { return "atomic_marked_list"; }
 
@@ -196,7 +196,7 @@ namespace epcpp {
     atomic_marked_list<T, Allocator>::~atomic_marked_list() {
         for (auto n = m_head.load(std::memory_order_relaxed); n;) {
             auto next = n->next.load(std::memory_order_relaxed);
-            delete n.get();
+            m_node_manager.destroy_node(n.get_unmarked());
             n = next;
         }
     }
@@ -250,8 +250,10 @@ namespace epcpp {
         }
 
     private:
+        using NodeAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<Node<T>>;
+
         std::atomic<marked_ptr<Node<Node<T> *>>> m_reclaimed;
-        allocator_type m_allocator;
+        NodeAllocator m_allocator;
     };
 
     template<class T, class Allocator>

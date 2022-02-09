@@ -1,0 +1,6 @@
+[submodule "exercise5/extern/oneTBB"]
+	path = exercise5/extern/oneTBB
+	url = git@github.com:oneapi-src/oneTBB.git
+[submodule "exercise5/extern/growt"]
+	path = exercise5/extern/growt
+	url = git@github.com:TooBiased/growt.git

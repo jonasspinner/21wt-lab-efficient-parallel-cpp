@@ -10,10 +10,14 @@ template<epcpp::concepts::Bucket B>
 class BucketTest : public ::testing::Test {
 };
 
+namespace tests {
+    template <class Key, class T>
+    using BaseBucket = epcpp::ListBucket<Key, T, epcpp::single_mutex_list, std::equal_to<>, std::allocator<std::pair<const Key, T>>, false>;
+}
 using BucketTypes = ::testing::Types<
-        epcpp::ListBucket<int, int, epcpp::single_mutex_list>,
-        epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::single_mutex_list>>,
-        epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::single_mutex_list>, 10>
+        tests::BaseBucket<int, int>,
+        epcpp::BloomFilterAdapter<tests::BaseBucket<int, int>>,
+        epcpp::BloomFilterAdapter<tests::BaseBucket<int, int>, 10>
 >;
 TYPED_TEST_SUITE(BucketTest, BucketTypes);
 
