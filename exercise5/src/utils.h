@@ -9,7 +9,7 @@
 namespace epcpp::utils {
     constexpr std::size_t next_power_of_two(std::size_t n) {
         std::size_t power = 1;
-        while (n < power) {
+        while (power < n) {
             power <<= 1;
         }
         return power;

@@ -1,3 +1,4 @@
+
 #include <chrono>
 #include <barrier>
 #include <vector>
@@ -5,29 +6,28 @@
 #include <iostream>
 #include <cassert>
 #include <iomanip>
+#include <fstream>
+
 
 #include "tbb/scalable_allocator.h"
 
 #include "utils.h"
-
-#include "lists/single_mutex_list.h"
-#include "lists/atomic_marked_list.h"
-#include "lists/node_mutex_list.h"
-
+#include "hash_map.h"
+#include "other_hash_maps.h"
 #include "instance_generation.h"
 
 namespace benchmarks {
-    template<class List>
+    template<class Map>
     std::chrono::nanoseconds execute_instance(
             const std::vector<epcpp::Operation<int>> &setup,
             const std::vector<epcpp::Operation<int>> &queries,
             std::size_t num_threads) {
-        List list;
+        Map list(setup.size());
 
         auto apply_op = [](auto &list, const auto &op) -> int {
             switch (op.kind) {
                 case epcpp::OperationKind::Insert: {
-                    auto r = list.insert(op.value);
+                    auto r = list.insert({op.value, op.value});
                     return r.second;
                 }
                 case epcpp::OperationKind::Find: {
@@ -43,10 +43,6 @@ namespace benchmarks {
             }
         };
 
-        for (const auto &op: setup) {
-            apply_op(list, op);
-        }
-
         std::barrier ready(num_threads + 1);
 
         auto do_work = [&](std::size_t thread_idx) {
@@ -60,6 +56,7 @@ namespace benchmarks {
             }
 
             ready.arrive_and_wait();
+
             {
                 auto start = queries.begin() + thread_idx * queries.size() / num_threads;
                 auto end = queries.begin() + (thread_idx + 1) * queries.size() / num_threads;
@@ -90,36 +87,43 @@ namespace benchmarks {
         return t1 - t0;
     }
 
-    template<class List,
+    template<class Map,
             class Benchmark>
     void execute_benchmark(
+            const std::string &output_filename,
             Benchmark benchmark,
             std::size_t log2_max_num_elements,
             std::size_t num_queries,
             std::size_t max_num_threads,
             std::size_t num_iterations
     ) {
-        auto benchmark_name = Benchmark::name();
-        auto list_name = List::name();
+        std::ofstream output(output_filename);
+        auto benchmark_name = benchmark.name();
+        auto map_name = Map::name();
 
-        std::cout << "benchmark_name,list_name,num_elements,num_queries,time,num_threads\n";
+        std::stringstream line;
+        line << "benchmark_name,map_name,num_elements,num_queries,time,num_threads\n";
+        std::cout << line.str();
+        output << line.str();
 
-        for (std::size_t k = 0; k <= log2_max_num_elements; ++k) {
+        for (std::size_t k = 0; k <= log2_max_num_elements; k++) {
             std::size_t num_elements = 1 << k;
-
             for (std::size_t iteration = 0; iteration < num_iterations; ++iteration) {
                 auto[setup, queries] = benchmark.generate(num_elements, num_queries, iteration);
                 for (std::size_t num_threads = 1; num_threads <= max_num_threads; ++num_threads) {
-                    auto time = benchmarks::execute_instance<List>(
+                    auto time = benchmarks::execute_instance<Map>(
                             setup, queries, num_threads);
-                    std::cout
+                    line.str("");
+                    line
                             << "\"" << benchmark_name << "\", "
-                            << "\"" << list_name << "\", "
+                            << "\"" << map_name << "\", "
                             << std::setw(12) << num_elements << ", "
                             << std::setw(12) << num_queries << ", "
                             << std::setw(16) << (double) time.count() << ", "
                             << std::setw(12) << num_threads
                             << std::endl;
+                    std::cout << line.str();
+                    output << line.str();
                 }
             }
         }
@@ -129,20 +133,25 @@ namespace benchmarks {
 int main() {
     using namespace benchmarks;
     using namespace epcpp;
-    std::size_t log2_max_num_elements = 10;
-    std::size_t num_queries = (1 << 10);
-    std::size_t max_num_threads = 16;
-    std::size_t num_iterations = 1;
+    std::size_t log2_max_num_elements = 20;
+    std::size_t num_queries = (1 << 20);
+    std::size_t max_num_threads = 4;
+    std::size_t num_iterations = 10;
 
-    execute_benchmark<atomic_marked_list<int>>(successful_find_benchmark(), log2_max_num_elements, num_queries,
-                                               max_num_threads, num_iterations);
-    execute_benchmark<atomic_marked_list<int>>(unsuccessful_find_benchmark(), log2_max_num_elements, num_queries,
-                                               max_num_threads, num_iterations);
-    execute_benchmark<node_mutex_list<int>>(successful_find_benchmark(), log2_max_num_elements, num_queries,
-                                            max_num_threads, num_iterations);
-    execute_benchmark<node_mutex_list<int>>(unsuccessful_find_benchmark(), log2_max_num_elements, num_queries,
-                                            max_num_threads, num_iterations);
-    execute_benchmark<atomic_marked_list<int, tbb::scalable_allocator<int>>>(successful_find_benchmark(),
-                                                                             log2_max_num_elements, num_queries,
-                                                                             max_num_threads, num_iterations);
+    using H01 = HashMap<int, int, std::hash<int>, ListBucket<int, int, single_mutex_list, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>, false>>;
+    using H02 = HashMap<int, int, std::hash<int>, ListBucket<int, int, node_mutex_list, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>, false>>;
+    using H03 = HashMap<int, int, std::hash<int>, ListBucket<int, int, atomic_marked_list, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>, false>>;
+    using H04 = std_hash_map<int, int>;
+    using H05 = tbb_hash_map<int, int>;
+
+    execute_benchmark<H01>("H01_successful_find.csv", successful_find_benchmark(), log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<H01>("H01_unsuccessful_find.csv", unsuccessful_find_benchmark(), log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<H02>("H02_successful_find.csv", successful_find_benchmark(), log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<H02>("H02_unsuccessful_find.csv", unsuccessful_find_benchmark(), log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<H03>("H03_successful_find.csv", successful_find_benchmark(), log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<H03>("H03_unsuccessful_find.csv", unsuccessful_find_benchmark(), log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<H04>("H04_successful_find.csv", successful_find_benchmark(), log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<H04>("H04_unsuccessful_find.csv", unsuccessful_find_benchmark(), log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<H05>("H05_successful_find.csv", successful_find_benchmark(), log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<H05>("H05_unsuccessful_find.csv", unsuccessful_find_benchmark(), log2_max_num_elements, num_queries, max_num_threads, num_iterations);
 }

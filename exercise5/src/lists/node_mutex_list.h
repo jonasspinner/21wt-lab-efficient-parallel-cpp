@@ -58,6 +58,38 @@ namespace epcpp {
             return m_head == nullptr;
         }
 
+        std::size_t size() const {
+            std::size_t n = 0;
+            std::shared_ptr<Node> prev_node;
+
+            m_head_mutex.lock_shared();
+            auto node = m_head;
+
+            if (node) {
+                node->next_mutex.lock_shared();
+                m_head_mutex.unlock_shared();
+
+                prev_node = std::exchange(node, node->next);
+                n++;
+            } else {
+                m_head_mutex.unlock_shared();
+                return n;
+            }
+
+            while (node) {
+                node->next_mutex.lock_shared();
+                prev_node->next_mutex.unlock_shared();
+
+                prev_node = std::exchange(node, node->next);
+                n++;
+            }
+
+            assert(prev_node);
+            prev_node->next_mutex.unlock_shared();
+
+            return n;
+        }
+
         [[nodiscard]] constexpr static std::string_view name() { return "node_mutex_list"; }
 
     private:

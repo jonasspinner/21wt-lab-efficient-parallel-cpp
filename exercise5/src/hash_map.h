@@ -7,6 +7,7 @@
 #include <mutex>
 #include <vector>
 #include <unordered_map>
+#include <sstream>
 
 #include "bucket.h"
 #include "lists/single_mutex_list.h"
@@ -93,6 +94,12 @@ namespace epcpp {
 
         handle end() { return handle(); }
 
+        static std::string name() {
+            std::stringstream ss;
+            ss << "hash_map<" << Bucket::name() << ">";
+            return ss.str();
+        }
+
     private:
         std::size_t index(std::size_t hash) const { return hash & m_mask; }
 
@@ -122,7 +129,7 @@ namespace epcpp {
     }
 
     template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
-    using hash_map = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::single_mutex_list, KeyEqual, Allocator, false>>;
+    using hash_map = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::atomic_marked_list, KeyEqual, Allocator, false>>;
 
     template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
     using hash_map_a = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::single_mutex_list, KeyEqual, Allocator, false>>;
@@ -132,44 +139,6 @@ namespace epcpp {
 
     template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
     using hash_map_c = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::atomic_marked_list, KeyEqual, Allocator, false>>;
-
-    template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
-    class hash_map_std {
-    private:
-        using InnerMap = std::unordered_map<Key, T, Hash, KeyEqual, Allocator>;
-    public:
-        using value_type = typename InnerMap::value_type;
-        using handle = typename InnerMap::iterator;
-        using const_handle = typename InnerMap::const_iterator;
-
-        hash_map_std(std::size_t capacity) : m_inner_map(capacity) {}
-
-        std::pair<handle, bool> insert(value_type &&value) {
-            std::unique_lock lock(m_mutex);
-            return m_inner_map.insert(std::move(value));
-        }
-
-        std::pair<handle, bool> insert(const value_type &value) {
-            std::unique_lock lock(m_mutex);
-            return m_inner_map.insert(value);
-        }
-
-        handle find(const Key &key) {
-            std::shared_lock lock(m_mutex);
-            return m_inner_map.find(key);
-        }
-
-        bool erase(const Key &key) {
-            std::unique_lock lock(m_mutex);
-            return m_inner_map.erase(key);
-        }
-
-        handle end() { return m_inner_map.end(); }
-
-    private:
-        mutable std::shared_mutex m_mutex;
-        InnerMap m_inner_map;
-    };
 }
 
 #endif //EXERCISE5_CONCURRENT_HASHMAP_H

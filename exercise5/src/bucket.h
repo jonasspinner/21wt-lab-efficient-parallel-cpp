@@ -99,6 +99,20 @@ namespace epcpp {
 
         handle end() { return handle(m_inner_list.end()); }
 
+        [[nodiscard]] bool empty() const {
+            return m_inner_list.empty();
+        }
+
+        [[nodiscard]] std::size_t size() const {
+            return m_inner_list.size();
+        }
+
+        static std::string name() {
+            std::stringstream ss;
+            ss << InnerList::name();
+            return ss.str();
+        }
+
     private:
         InnerList m_inner_list;
     };

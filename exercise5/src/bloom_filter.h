@@ -78,6 +78,12 @@ namespace epcpp {
 
         const_handle end() const { return m_bucket.end(); }
 
+        static std::string name() {
+            std::stringstream ss;
+            ss << "BloomFilter<" << BucketBase::name() << "," << NumFilters << ">";
+            return ss.str();
+        }
+
     private:
         void bloom_filter_insert(std::size_t hash) {
             m_bloom_filter.fetch_or(get_filter_mask(hash), std::memory_order_relaxed);

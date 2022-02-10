@@ -57,6 +57,16 @@ namespace epcpp {
             return m_head == nullptr;
         }
 
+        std::size_t size() const {
+            std::size_t n = 0;
+            std::shared_lock lock(m_mutex);
+
+            for (auto node = m_head; node; node = node->next) {
+                n++;
+            }
+            return n;
+        }
+
         [[nodiscard]] constexpr static std::string_view name() { return "single_mutex_list"; }
 
     private:

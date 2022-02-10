@@ -22,6 +22,7 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+add_compile_definitions("TBB_TEST=OFF")
 FetchContent_Declare(
         oneTBB
         URL https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.5.0.zip
@@ -44,13 +45,15 @@ FetchContent_MakeAvailable(oneTBB)
 add_executable(external_maps app/external_maps.cpp)
 target_link_libraries(external_maps TBB::tbb TBB::tbbmalloc)
 
+add_executable(generate app/generate.cpp)
+
 #### TESTS #####################################################################
 
 enable_testing()
 include(GoogleTest)
 
 add_executable(list_test tests/list_test.cpp)
-target_link_libraries(list_test gtest gtest_main)
+target_link_libraries(list_test gtest gtest_main TBB::tbb TBB::tbbmalloc)
 gtest_discover_tests(list_test)
 
 add_executable(bucket_test tests/bucket_test.cpp)
@@ -66,7 +69,7 @@ target_link_libraries(marked_ptr_test gtest gtest_main)
 gtest_discover_tests(marked_ptr_test)
 
 add_executable(hash_map_test tests/hash_map_test.cpp)
-target_link_libraries(hash_map_test gtest gtest_main)
+target_link_libraries(hash_map_test gtest gtest_main TBB::tbb TBB::tbbmalloc)
 gtest_discover_tests(hash_map_test)
 
 
@@ -74,3 +77,7 @@ gtest_discover_tests(hash_map_test)
 
 add_executable(list_benchmark benchmarks/list_benchmark.cpp)
 target_link_libraries(list_benchmark TBB::tbb TBB::tbbmalloc)
+
+add_executable(hash_map_benchmark benchmarks/hash_map_benchmark.cpp)
+target_link_libraries(hash_map_benchmark TBB::tbb TBB::tbbmalloc)
+

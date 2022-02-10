@@ -4,6 +4,7 @@
 #include <barrier>
 
 #include "hash_map.h"
+#include "other_hash_maps.h"
 #include "bloom_filter.h"
 
 
@@ -19,7 +20,8 @@ using HashMapTypes = ::testing::Types<
         epcpp::hash_map_a<int, int>,
         epcpp::hash_map_b<int, int>,
         epcpp::hash_map_c<int, int>,
-        epcpp::hash_map_std<int, int>
+        epcpp::std_hash_map<int, int>,
+        epcpp::tbb_hash_map<int, int>
 >;
 TYPED_TEST_SUITE(HashMapTest, HashMapTypes);
 

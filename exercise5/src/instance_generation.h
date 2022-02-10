@@ -5,6 +5,7 @@
 #include <random>
 #include <exception>
 #include <iostream>
+#include <sstream>
 
 namespace epcpp {
     enum class OperationKind {
@@ -21,62 +22,14 @@ namespace epcpp {
         Value value;
     };
 
-
-    std::vector<Operation<int>>
-    generate_list_int_instances(std::size_t num_operations, float p_insert, float p_find, float p_remove) {
-        if (std::abs(1.0f - (p_insert + p_find + p_remove)) > 1e-4f) {
-            throw std::invalid_argument("");
-        }
-
-        std::mt19937_64 gen;
-        std::geometric_distribution<int> key_dist(0.4);
-        std::bernoulli_distribution find_dist(p_find);
-        std::bernoulli_distribution insert_vs_remove_dist(p_insert / (p_insert + p_remove));
-
-        std::vector<Operation<int>> result;
-        result.reserve(num_operations);
-
-        for (std::size_t i = 0; i < num_operations; ++i) {
-            int key = key_dist(gen);
-            if (find_dist(gen)) {
-                result.push_back(Operation<int>{OperationKind::Find, key});
-            } else if (insert_vs_remove_dist(gen)) {
-                result.push_back(Operation<int>{OperationKind::Insert, key});
-            } else {
-                result.push_back(Operation<int>{OperationKind::Erase, key});
-            }
-        }
-        return result;
-    }
-
-
-    std::vector<Operation<int>> generate_operations(std::size_t num_finds, std::size_t num_modifications) {
-        std::mt19937_64 gen;
-        std::geometric_distribution<int> key_dist(0.4);
-
-        std::vector<Operation<int>> result;
-        result.reserve(num_finds + num_modifications);
-        for (std::size_t i = 0; i < num_finds; ++i) {
-            int key = key_dist(gen);
-            result.emplace_back(OperationKind::Find, key);
-        }
-        for (std::size_t i = 0; i < num_modifications / 2; ++i) {
-            int key = key_dist(gen);
-            result.emplace_back(OperationKind::Insert, key);
-            result.emplace_back(OperationKind::Erase, key);
-        }
-
-        std::shuffle(result.begin(), result.end(), gen);
-
-        return result;
-    }
-
     class successful_find_benchmark {
     public:
         constexpr static std::string_view name() { return "successful_find"; }
 
         std::pair<std::vector<Operation<int>>, std::vector<Operation<int>>>
-        generate(std::size_t num_elements, std::size_t num_queries) {
+        generate(std::size_t num_elements, std::size_t num_queries, std::size_t seed) {
+            std::mt19937_64 gen(seed);
+
             std::vector<Operation<int>> setup;
             std::vector<Operation<int>> queries;
 
@@ -85,16 +38,14 @@ namespace epcpp {
                 setup.emplace_back(OperationKind::Insert, key);
             }
 
-            std::mt19937_64 gen;
+            std::shuffle(setup.begin(), setup.end(), gen);
+
             std::uniform_int_distribution<int> key_dist(0, num_elements - 1);
 
             for (std::size_t i = 0; i < num_queries; ++i) {
                 int key = key_dist(gen);
                 queries.emplace_back(OperationKind::Find, key);
             }
-
-            std::shuffle(setup.begin(), setup.end(), gen);
-            std::shuffle(queries.begin(), queries.end(), gen);
 
             return {setup, queries};
         }
@@ -105,7 +56,9 @@ namespace epcpp {
         constexpr static std::string_view name() { return "unsuccessful_find"; }
 
         std::pair<std::vector<Operation<int>>, std::vector<Operation<int>>>
-        generate(std::size_t num_elements, std::size_t num_queries) {
+        generate(std::size_t num_elements, std::size_t num_queries, std::size_t seed) {
+            std::mt19937_64 gen(seed);
+
             std::vector<Operation<int>> setup;
             std::vector<Operation<int>> queries;
 
@@ -114,7 +67,8 @@ namespace epcpp {
                 setup.emplace_back(OperationKind::Insert, key);
             }
 
-            std::mt19937_64 gen;
+            std::shuffle(setup.begin(), setup.end(), gen);
+
             std::uniform_int_distribution<int> key_dist(num_elements, 2 * num_elements - 1);
 
             for (std::size_t i = 0; i < num_queries; ++i) {
@@ -122,8 +76,93 @@ namespace epcpp {
                 queries.emplace_back(OperationKind::Find, key);
             }
 
+            return {setup, queries};
+        }
+    };
+
+    class find_benchmark {
+        float successful_find_probability = 1.0;
+    public:
+        find_benchmark(float successful_find_probability) : successful_find_probability(successful_find_probability) {}
+
+        std::string name() {
+            std::stringstream ss;
+            ss << "find<p=" << successful_find_probability << ">";
+            return ss.str();
+        }
+
+        std::pair<std::vector<Operation<int>>, std::vector<Operation<int>>>
+        generate(std::size_t num_elements, std::size_t num_queries, std::size_t seed) {
+            std::mt19937_64 gen(seed);
+
+            std::vector<Operation<int>> setup;
+            std::vector<Operation<int>> queries;
+
+            for (std::size_t i = 0; i < num_elements; ++i) {
+                int key = i;
+                setup.emplace_back(OperationKind::Insert, key);
+            }
+
             std::shuffle(setup.begin(), setup.end(), gen);
-            std::shuffle(queries.begin(), queries.end(), gen);
+
+            std::uniform_int_distribution<int> key_dist(0, num_elements - 1);
+            std::bernoulli_distribution sucess_dist(successful_find_probability);
+
+            for (std::size_t i = 0; i < num_queries; ++i) {
+                int key = key_dist(gen);
+                if (!sucess_dist(gen))
+                    key += num_elements;
+                queries.emplace_back(OperationKind::Find, key);
+            }
+
+            return {setup, queries};
+        }
+    };
+
+    class find_and_modifiy_benchmark {
+        float successful_find_probability = 1.0;
+        float modification_probability = 0.0;
+    public:
+        find_and_modifiy_benchmark(float successful_find_probability, float modification_probability)
+                : successful_find_probability(successful_find_probability),
+                  modification_probability(modification_probability) {}
+
+        std::string name() {
+            std::stringstream ss;
+            ss << "find_and_modifiy<p=" << successful_find_probability << ",q=" << modification_probability << ">";
+            return ss.str();
+        }
+
+        std::pair<std::vector<Operation<int>>, std::vector<Operation<int>>>
+        generate(std::size_t num_elements, std::size_t num_queries, std::size_t seed) {
+            std::mt19937_64 gen(seed);
+
+            std::vector<Operation<int>> setup;
+            std::vector<Operation<int>> queries;
+
+            for (std::size_t i = 0; i < num_elements; ++i) {
+                int key = i;
+                setup.emplace_back(OperationKind::Insert, key);
+            }
+
+            std::shuffle(setup.begin(), setup.end(), gen);
+
+            std::uniform_int_distribution<int> key_dist(0, num_elements - 1);
+            std::bernoulli_distribution success_dist(successful_find_probability);
+            std::bernoulli_distribution modification_dist(modification_probability);
+
+            for (std::size_t i = 0; i < num_queries; ++i) {
+                int key = key_dist(gen);
+                if ((successful_find_probability == 0.0) || ((successful_find_probability != 1.0) && !success_dist(gen)))
+                    key += num_elements;
+                if (i + 1 < num_queries && ((modification_probability == 1.0) || ((modification_probability != 0.0) && modification_dist(gen)))) {
+                    queries.emplace_back(OperationKind::Erase, key);
+                    queries.emplace_back(OperationKind::Insert, key);
+                    ++i;
+                } else {
+                    queries.emplace_back(OperationKind::Find, key);
+                }
+            }
 
             return {setup, queries};
         }

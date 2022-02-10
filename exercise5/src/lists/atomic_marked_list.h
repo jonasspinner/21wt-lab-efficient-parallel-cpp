@@ -62,6 +62,18 @@ namespace epcpp {
 
         [[nodiscard]] constexpr bool empty() const { return m_head.load(std::memory_order_relaxed).get() == nullptr; }
 
+        [[nodiscard]] std::size_t size() const {
+            std::size_t n = 0;
+            for (auto node = m_head.load(std::memory_order_acquire); node; ) {
+                auto next = node->next.load(std::memory_order_acquire);
+                if (!next.is_marked()) {
+                    n++;
+                }
+                node = next;
+            }
+            return n;
+        }
+
         [[nodiscard]] constexpr static std::string_view name() { return "atomic_marked_list"; }
 
     private:

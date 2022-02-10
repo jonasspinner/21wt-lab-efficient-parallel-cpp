@@ -2,6 +2,8 @@
 #include <thread>
 #include <barrier>
 
+#include "tbb/scalable_allocator.h"
+
 #include "lists/single_mutex_list.h"
 #include "lists/_leaking_atomic_list.h"
 #include "lists/node_mutex_list.h"
@@ -38,10 +40,11 @@ class ListTest : public ::testing::Test {
 
 using ListTypes = ::testing::Types<
         epcpp::single_mutex_list<int>,
-//        epcpp::leaking_atomic_list<int>,
         epcpp::node_mutex_list<int>,
-//        epcpp::atomic_shared_ptr_list<int>,
-        epcpp::atomic_marked_list<int>
+        epcpp::atomic_marked_list<int>,
+        epcpp::single_mutex_list<int, tbb::scalable_allocator<int>>,
+        epcpp::node_mutex_list<int, tbb::scalable_allocator<int>>,
+        epcpp::atomic_marked_list<int, tbb::scalable_allocator<int>>
 >;
 TYPED_TEST_SUITE(ListTest, ListTypes);
 
