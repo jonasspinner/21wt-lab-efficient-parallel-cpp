@@ -36,11 +36,11 @@ namespace epcpp {
 
     }
 
-    template<class Key, class T, class Hash, concepts::Bucket Bucket>
+    template<class Hash, concepts::Bucket Bucket>
     class HashMap {
     private:
         struct InnerHash {
-            std::size_t operator()(const Key &key) const {
+            std::size_t operator()(const typename Bucket::key_type &key) const {
                 auto x = Hash{}(key);
                 // murmurhash3
                 // https://github.com/martinus/robin-hood-hashing/blob/master/src/include/robin_hood.h#L748-L759
@@ -54,10 +54,12 @@ namespace epcpp {
         };
 
     public:
-        using key_type = Key;
-        using mapped_type = T;
-        using value_type = std::pair<const Key, T>;
+        using key_type = typename Bucket::key_type;
+        using mapped_type = typename Bucket::mapped_type;
+        using value_type = typename Bucket::value_type;
 
+        using hasher = Hash;
+        using key_equal = typename Bucket::key_equal;
         using allocator_type = typename Bucket::allocator_type;
 
         using handle = typename Bucket::handle;
@@ -88,9 +90,9 @@ namespace epcpp {
             return insert(std::move(copy));
         };
 
-        handle find(const Key &key);
+        handle find(const key_type &key);
 
-        bool erase(const Key &key);
+        bool erase(const key_type &key);
 
         handle end() { return handle(); }
 
@@ -110,35 +112,35 @@ namespace epcpp {
     };
 
 
-    template<class Key, class T, class Hash, concepts::Bucket Bucket>
-    auto HashMap<Key, T, Hash, Bucket>::insert(value_type &&value) -> std::pair<handle, bool> {
+    template<class Hash, concepts::Bucket Bucket>
+    auto HashMap<Hash, Bucket>::insert(value_type &&value) -> std::pair<handle, bool> {
         auto hash = InnerHash{}(value.first);
         return m_buckets[index(hash)].insert(std::move(value), hash);
     }
 
-    template<class Key, class T, class Hash, concepts::Bucket Bucket>
-    auto HashMap<Key, T, Hash, Bucket>::find(const Key &key) -> handle {
+    template<class Hash, concepts::Bucket Bucket>
+    auto HashMap<Hash, Bucket>::find(const key_type &key) -> handle {
         auto hash = InnerHash{}(key);
         return m_buckets[index(hash)].find(key, hash);
     }
 
-    template<class Key, class T, class Hash, concepts::Bucket Bucket>
-    bool HashMap<Key, T, Hash, Bucket>::erase(const Key &key) {
+    template<class Hash, concepts::Bucket Bucket>
+    bool HashMap<Hash, Bucket>::erase(const key_type &key) {
         auto hash = InnerHash{}(key);
         return m_buckets[index(hash)].erase(key, hash);
     }
 
     template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
-    using hash_map = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::atomic_marked_list, KeyEqual, Allocator, false>>;
+    using hash_map = epcpp::HashMap<Hash, epcpp::ListBucket<Key, T, epcpp::atomic_marked_list, KeyEqual, Allocator, false>>;
 
     template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
-    using hash_map_a = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::single_mutex_list, KeyEqual, Allocator, false>>;
+    using hash_map_a = epcpp::HashMap<Hash, epcpp::ListBucket<Key, T, epcpp::single_mutex_list, KeyEqual, Allocator, false>>;
 
     template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
-    using hash_map_b = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::node_mutex_list, KeyEqual, Allocator, false>>;
+    using hash_map_b = epcpp::HashMap<Hash, epcpp::ListBucket<Key, T, epcpp::node_mutex_list, KeyEqual, Allocator, false>>;
 
     template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<>, class Allocator = std::allocator<std::pair<const Key, T>>>
-    using hash_map_c = epcpp::HashMap<Key, T, Hash, epcpp::ListBucket<Key, T, epcpp::atomic_marked_list, KeyEqual, Allocator, false>>;
+    using hash_map_c = epcpp::HashMap<Hash, epcpp::ListBucket<Key, T, epcpp::atomic_marked_list, KeyEqual, Allocator, false>>;
 }
 
 #endif //EXERCISE5_CONCURRENT_HASHMAP_H

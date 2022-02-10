@@ -15,6 +15,7 @@ namespace epcpp {
     private:
         using Compare = std::equal_to<>;
         constexpr static Compare compare{};
+        static_assert(std::is_invocable_r_v<bool, Compare, const T&, const T&>);
 
         template<class InnerValue>
         struct Node;
@@ -64,7 +65,7 @@ namespace epcpp {
 
         [[nodiscard]] std::size_t size() const {
             std::size_t n = 0;
-            for (auto node = m_head.load(std::memory_order_acquire); node; ) {
+            for (auto node = m_head.load(std::memory_order_acquire); node;) {
                 auto next = node->next.load(std::memory_order_acquire);
                 if (!next.is_marked()) {
                     n++;
@@ -77,15 +78,11 @@ namespace epcpp {
         [[nodiscard]] constexpr static std::string_view name() { return "atomic_marked_list"; }
 
     private:
-        using node = Node<T>;
-
-        using node_ptr = node *;
-
-        std::atomic<marked_ptr<node>> m_head{nullptr};
+        std::atomic<marked_ptr<Node<T>>> m_head{nullptr};
         node_manager m_node_manager;
 
-        bool try_skip_node(std::atomic<marked_ptr<node>> *&prev_next_ptr, marked_ptr<node> &prev_next,
-                           marked_ptr<node> node_to_skip, marked_ptr<node> next) {
+        bool try_skip_node(std::atomic<marked_ptr<Node<T>>> *&prev_next_ptr, marked_ptr<Node<T>> &prev_next,
+                           marked_ptr<Node<T>> node_to_skip, marked_ptr<Node<T>> next) {
             if (prev_next_ptr) {
                 assert(!prev_next.is_marked());
                 assert(next.is_marked());
@@ -106,7 +103,8 @@ namespace epcpp {
     template<class T, class Allocator>
     template<class Value>
     auto atomic_marked_list<T, Allocator>::insert(Value &&value) -> std::pair<handle, bool> {
-        node_ptr new_node = m_node_manager.create_node(std::forward<Value>(value));
+        static_assert(std::is_constructible_v<value_type, Value &&>);
+        auto new_node = m_node_manager.create_node(std::forward<Value>(value));
 
         restart:
 
@@ -156,6 +154,7 @@ namespace epcpp {
     template<class T, class Allocator>
     template<class Value>
     auto atomic_marked_list<T, Allocator>::find(const Value &value) -> handle {
+        static_assert(std::is_invocable_r_v<bool, Compare, const value_type &, const Value &>);
         marked_ptr node = m_head.load(std::memory_order_acquire);
         while (node) {
             auto next = node->next.load(std::memory_order_acquire);
@@ -170,6 +169,7 @@ namespace epcpp {
     template<class T, class Allocator>
     template<class Value>
     bool atomic_marked_list<T, Allocator>::erase(const Value &value) {
+        static_assert(std::is_invocable_r_v<bool, Compare, const value_type &, const Value &>);
         auto prev_next_ptr = &m_head;
         auto node = prev_next_ptr->load(std::memory_order_acquire);
         auto prev_next = node;
@@ -218,20 +218,20 @@ namespace epcpp {
     public:
         explicit node_manager(const Allocator &alloc) noexcept: m_allocator(alloc) {}
 
-        template<class Value>
-        [[nodiscard]] node_ptr create_node(Value &&value) {
+        template<class ...Args>
+        [[nodiscard]] Node<T>* create_node(Args &&...args) {
             auto ptr = m_allocator.allocate(1);
-            std::construct_at(ptr, std::forward<Value>(value));
+            std::construct_at(ptr, std::forward<Args>(args)...);
             return ptr;
         }
 
-        void destroy_node(node_ptr node) {
+        void destroy_node(Node<T>* node) {
             std::destroy_at(node);
             m_allocator.deallocate(node, 1);
         }
 
-        void reclaim_node(node_ptr node) {
-            auto n = marked_ptr(new Node<node_ptr>(node));
+        void reclaim_node(Node<T>* node) {
+            auto n = marked_ptr(new Node<Node<T>*>(node));
             n->next = m_reclaimed.load(std::memory_order_relaxed);
             while (true) {
                 auto next = n->next.load(std::memory_order_relaxed);
@@ -315,7 +315,9 @@ namespace epcpp {
 
         [[nodiscard]] constexpr bool operator==(const Handle &other) const { return m_node == other.m_node; }
 
-        [[nodiscard]] constexpr std::weak_ordering operator<=>(const Handle &other) const { return m_node <=> other.m_node; };
+        [[nodiscard]] constexpr std::weak_ordering operator<=>(const Handle &other) const {
+            return m_node <=> other.m_node;
+        };
 
         operator Handle<const ValueType>() const { return {m_node}; }
 

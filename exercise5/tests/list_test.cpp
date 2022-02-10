@@ -252,7 +252,7 @@ TYPED_TEST(ListTest, ConcurrentSingleValueInsertErase) {
 }
 
 
-TEST(ListTest, ConcurrentUpdate) {
+TEST(ListTest, AtomicValueType) {
     epcpp::atomic_marked_list<std::atomic<int>> list;
 
     {

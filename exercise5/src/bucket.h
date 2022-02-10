@@ -58,6 +58,7 @@ namespace epcpp {
         using key_equal = KeyEqual;
 
         using allocator_type = Allocator;
+        static_assert(std::is_same_v<typename std::allocator_traits<Allocator>::value_type, value_type>);
 
         using handle = Handle<mapped_type>;
         using const_handle = Handle<const mapped_type>;

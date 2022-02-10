@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cassert>
 #include <iomanip>
+#include <fstream>
 
 #include "tbb/scalable_allocator.h"
 
@@ -93,16 +94,22 @@ namespace benchmarks {
     template<class List,
             class Benchmark>
     void execute_benchmark(
+            const std::string &output_filename,
             Benchmark benchmark,
             std::size_t log2_max_num_elements,
             std::size_t num_queries,
             std::size_t max_num_threads,
             std::size_t num_iterations
     ) {
+        std::ofstream output(output_filename);
+
         auto benchmark_name = Benchmark::name();
         auto list_name = List::name();
 
-        std::cout << "benchmark_name,list_name,num_elements,num_queries,time,num_threads\n";
+        std::stringstream line;
+        line << "benchmark_name,list_name,num_elements,num_queries,time,num_threads\n";
+        std::cout << line.str();
+        output << line.str();
 
         for (std::size_t k = 0; k <= log2_max_num_elements; ++k) {
             std::size_t num_elements = 1 << k;
@@ -112,7 +119,8 @@ namespace benchmarks {
                 for (std::size_t num_threads = 1; num_threads <= max_num_threads; ++num_threads) {
                     auto time = benchmarks::execute_instance<List>(
                             setup, queries, num_threads);
-                    std::cout
+                    line.str("");
+                    line
                             << "\"" << benchmark_name << "\", "
                             << "\"" << list_name << "\", "
                             << std::setw(12) << num_elements << ", "
@@ -120,6 +128,57 @@ namespace benchmarks {
                             << std::setw(16) << (double) time.count() << ", "
                             << std::setw(12) << num_threads
                             << std::endl;
+                    std::cout << line.str();
+                    output << line.str();
+                }
+            }
+        }
+    }
+
+    template<class List>
+    void execute_find_and_modifiy_benchmark(
+            const std::string &output_filename,
+            std::size_t num_elements,
+            float successful_find_probability,
+            std::size_t num_modification_probabilities,
+            std::size_t num_queries,
+            std::size_t max_num_threads,
+            std::size_t num_iterations
+    ) {
+        std::ofstream output(output_filename);
+
+        auto benchmark_name = "find_and_modifiy";
+        auto list_name = List::name();
+
+        std::stringstream line;
+        line
+                << "benchmark_name,list_name,num_elements,num_queries,successful_find_probability,modification_probability,time,num_threads\n";
+        std::cout << line.str();
+        output << line.str();
+
+        for (std::size_t i = 0; i < num_modification_probabilities; ++i) {
+            float modification_probability = i == 0 ? 0 : (double)(1 << i) / (double)(1 << (num_modification_probabilities - 1));
+
+            auto benchmark = epcpp::find_and_modifiy_benchmark(successful_find_probability, modification_probability);
+
+            for (std::size_t iteration = 0; iteration < num_iterations; ++iteration) {
+                auto[setup, queries] = benchmark.generate(num_elements, num_queries, iteration);
+                for (std::size_t num_threads = 1; num_threads <= max_num_threads; ++num_threads) {
+                    auto time = benchmarks::execute_instance<List>(
+                            setup, queries, num_threads);
+                    line.str("");
+                    line
+                            << "\"" << benchmark_name << "\", "
+                            << "\"" << list_name << "\", "
+                            << std::setw(12) << num_elements << ", "
+                            << std::setw(12) << num_queries << ", "
+                            << std::setw(12) << successful_find_probability << ", "
+                            << std::setw(12) << modification_probability << ", "
+                            << std::setw(16) << (double) time.count() << ", "
+                            << std::setw(12) << num_threads
+                            << std::endl;
+                    std::cout << line.str();
+                    output << line.str();
                 }
             }
         }
@@ -129,20 +188,33 @@ namespace benchmarks {
 int main() {
     using namespace benchmarks;
     using namespace epcpp;
-    std::size_t log2_max_num_elements = 10;
-    std::size_t num_queries = (1 << 10);
+    std::size_t log2_max_num_elements = 8;
+    std::size_t num_queries = (1 << 20);
     std::size_t max_num_threads = 16;
-    std::size_t num_iterations = 1;
+    std::size_t num_iterations = 10;
 
-    execute_benchmark<atomic_marked_list<int>>(successful_find_benchmark(), log2_max_num_elements, num_queries,
-                                               max_num_threads, num_iterations);
-    execute_benchmark<atomic_marked_list<int>>(unsuccessful_find_benchmark(), log2_max_num_elements, num_queries,
-                                               max_num_threads, num_iterations);
-    execute_benchmark<node_mutex_list<int>>(successful_find_benchmark(), log2_max_num_elements, num_queries,
-                                            max_num_threads, num_iterations);
-    execute_benchmark<node_mutex_list<int>>(unsuccessful_find_benchmark(), log2_max_num_elements, num_queries,
-                                            max_num_threads, num_iterations);
-    execute_benchmark<atomic_marked_list<int, tbb::scalable_allocator<int>>>(successful_find_benchmark(),
-                                                                             log2_max_num_elements, num_queries,
-                                                                             max_num_threads, num_iterations);
+    using L01 = single_mutex_list<int, tbb::scalable_allocator<int>>;
+    using L02 = node_mutex_list<int, tbb::scalable_allocator<int>>;
+    using L03 = atomic_marked_list<int, tbb::scalable_allocator<int>>;
+
+    execute_benchmark<L01>("../eval/L01_successful_find.csv", successful_find_benchmark(),
+                           log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<L02>("../eval/L02_successful_find.csv", successful_find_benchmark(),
+                           log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<L03>("../eval/L03_successful_find.csv", successful_find_benchmark(),
+                           log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+
+    execute_benchmark<L01>("../eval/L01_unsuccessful_find.csv", unsuccessful_find_benchmark(),
+                           log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<L02>("../eval/L02_unsuccessful_find.csv", unsuccessful_find_benchmark(),
+                           log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+    execute_benchmark<L03>("../eval/L03_unsuccessful_find.csv", unsuccessful_find_benchmark(),
+                           log2_max_num_elements, num_queries, max_num_threads, num_iterations);
+
+    execute_find_and_modifiy_benchmark<L01>("../eval/L01_find_and_modifiy.csv",
+                                            1 << 8, 0.1, 11, 1 << 16, max_num_threads, num_iterations);
+    execute_find_and_modifiy_benchmark<L02>("../eval/L02_find_and_modifiy.csv",
+                                            1 << 8, 0.1, 11, 1 << 16, max_num_threads, num_iterations);
+    execute_find_and_modifiy_benchmark<L03>("../eval/L03_find_and_modifiy.csv",
+                                            1 << 8, 0.1, 11, 1 << 16, max_num_threads, num_iterations);
 }

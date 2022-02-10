@@ -14,14 +14,14 @@ class HashMapTest : public ::testing::Test {
 
 using HashMapTypes = ::testing::Types<
         epcpp::hash_map<int, int>,
-        epcpp::HashMap<int, int, std::hash<int>, epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::atomic_marked_list, std::equal_to<>, std::allocator<std::pair<const int, int>>, false>>>,
-        epcpp::HashMap<int, int, std::hash<int>, epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::atomic_marked_list, std::equal_to<>, std::allocator<std::pair<const int, int>>, false>>>,
-        epcpp::HashMap<int, int, std::hash<int>, epcpp::ListBucket<int, int, epcpp::single_mutex_list, std::equal_to<>, std::allocator<std::pair<const int, int>>, false>>,
+        epcpp::HashMap<std::hash<int>, epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::atomic_marked_list, std::equal_to<>, std::allocator<std::pair<const int, int>>, false>>>,
+        epcpp::HashMap<std::hash<int>, epcpp::BloomFilterAdapter<epcpp::ListBucket<int, int, epcpp::atomic_marked_list, std::equal_to<>, std::allocator<std::pair<const int, int>>, false>>>,
+        epcpp::HashMap<std::hash<int>, epcpp::ListBucket<int, int, epcpp::single_mutex_list, std::equal_to<>, std::allocator<std::pair<const int, int>>, false>>,
         epcpp::hash_map_a<int, int>,
         epcpp::hash_map_b<int, int>,
         epcpp::hash_map_c<int, int>,
-        epcpp::std_hash_map<int, int>,
-        epcpp::tbb_hash_map<int, int>
+        epcpp::std_hash_map<int, int>
+//        epcpp::tbb_hash_map<int, int>
 >;
 TYPED_TEST_SUITE(HashMapTest, HashMapTypes);
 
@@ -102,6 +102,22 @@ TYPED_TEST(HashMapTest, Find) {
         auto erased = map.erase(i);
         ASSERT_TRUE(erased) << i;
     }
+}
+
+
+TEST(HashMapTest, AtomicValueType) {
+    struct D {
+        D(int value) : value(value) {}
+        D(D&& other) : value(other.value.load()) {}
+        std::atomic<int> value;
+    };
+
+    epcpp::hash_map<int, D> map(10);
+
+    map.insert({0, 0});
+
+    map.find(0)->second.value.fetch_add(1);
+    ASSERT_EQ(map.find(0)->second.value.load(), 1);
 }
 
 

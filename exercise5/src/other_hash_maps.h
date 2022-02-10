@@ -13,7 +13,14 @@ namespace epcpp {
     private:
         using InnerMap = std::unordered_map<Key, T, Hash, KeyEqual, Allocator>;
     public:
+        using key_type = typename InnerMap::key_type;
+        using mapped_type = typename InnerMap::mapped_type;
         using value_type = typename InnerMap::value_type;
+
+        using hasher = typename InnerMap::hasher;
+        using key_equal = typename InnerMap::key_equal;
+        using allocator_type = typename InnerMap::allocator_type;
+
         using handle = typename InnerMap::iterator;
         using const_handle = typename InnerMap::const_iterator;
 
@@ -29,12 +36,12 @@ namespace epcpp {
             return m_inner_map.insert(value);
         }
 
-        handle find(const Key &key) {
+        handle find(const key_type &key) {
             std::shared_lock lock(m_mutex);
             return m_inner_map.find(key);
         }
 
-        bool erase(const Key &key) {
+        bool erase(const key_type &key) {
             std::unique_lock lock(m_mutex);
             return m_inner_map.erase(key);
         }
@@ -55,7 +62,14 @@ namespace epcpp {
     private:
         using InnerMap = tbb::concurrent_unordered_map<Key, T, Hash, KeyEqual, Allocator>;
     public:
+        using key_type = typename InnerMap::key_type;
+        using mapped_type = typename InnerMap::mapped_type;
         using value_type = typename InnerMap::value_type;
+
+        using hasher = typename InnerMap::hasher;
+        using key_equal = typename InnerMap::key_equal;
+        using allocator_type = typename InnerMap::allocator_type;
+
         using handle = typename InnerMap::iterator;
         using const_handle = typename InnerMap::const_iterator;
 
@@ -69,11 +83,11 @@ namespace epcpp {
             return m_inner_map.insert(value);
         }
 
-        handle find(const Key &key) {
+        handle find(const key_type &key) {
             return m_inner_map.find(key);
         }
 
-        bool erase(const Key &key) {
+        bool erase(const key_type &key) {
             throw std::runtime_error("erase not implemented");
             // return m_inner_map.erase(key);
             return false;

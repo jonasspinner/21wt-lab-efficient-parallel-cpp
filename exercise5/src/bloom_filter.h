@@ -89,7 +89,7 @@ namespace epcpp {
             m_bloom_filter.fetch_or(get_filter_mask(hash), std::memory_order_relaxed);
         }
 
-        bool bloom_filter_contains(std::size_t hash) const {
+        [[nodiscard]] bool bloom_filter_contains(std::size_t hash) const {
             const auto filter = m_bloom_filter.load(std::memory_order_relaxed);
             const auto mask = get_filter_mask(hash);
             return (filter & mask) == mask;
