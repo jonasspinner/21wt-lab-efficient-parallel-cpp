@@ -167,6 +167,43 @@ namespace epcpp {
             return {setup, queries};
         }
     };
+
+
+    class skewed_find_benchmark {
+        float geometric_dist_param = 1.0;
+    public:
+        skewed_find_benchmark(float geometric_dist_param) : geometric_dist_param(geometric_dist_param) {}
+
+        std::string name() {
+            std::stringstream ss;
+            ss << "skewed_find<p=" << geometric_dist_param << ">";
+            return ss.str();
+        }
+
+        std::pair<std::vector<Operation<int>>, std::vector<Operation<int>>>
+        generate(std::size_t num_elements, std::size_t num_queries, std::size_t seed) {
+            std::mt19937_64 gen(seed);
+
+            std::vector<Operation<int>> setup;
+            std::vector<Operation<int>> queries;
+
+            for (std::size_t i = 0; i < num_elements; ++i) {
+                int key = i;
+                setup.emplace_back(OperationKind::Insert, key);
+            }
+
+            std::shuffle(setup.begin(), setup.end(), gen);
+
+            std::geometric_distribution<int> key_dist(geometric_dist_param);
+
+            for (std::size_t i = 0; i < num_queries; ++i) {
+                int key = key_dist(gen);
+                queries.emplace_back(OperationKind::Find, key);
+            }
+
+            return {setup, queries};
+        }
+    };
 }
 
 std::ostream &operator<<(std::ostream &os, epcpp::OperationKind kind) {

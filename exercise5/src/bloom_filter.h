@@ -80,7 +80,7 @@ namespace epcpp {
 
         static std::string name() {
             std::stringstream ss;
-            ss << "BloomFilter<" << BucketBase::name() << "," << NumFilters << ">";
+            ss << "BloomFilter<" << BucketBase::name() << " " << NumFilters << ">";
             return ss.str();
         }
 

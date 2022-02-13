@@ -81,3 +81,5 @@ target_link_libraries(list_benchmark TBB::tbb TBB::tbbmalloc)
 add_executable(hash_map_benchmark benchmarks/hash_map_benchmark.cpp)
 target_link_libraries(hash_map_benchmark TBB::tbb TBB::tbbmalloc)
 
+add_executable(bloom_filter_benchmark benchmarks/bloom_filter_benchmark.cpp)
+target_link_libraries(bloom_filter_benchmark TBB::tbb TBB::tbbmalloc)
