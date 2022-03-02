@@ -19,10 +19,11 @@
 namespace benchmarks {
     template<class Map>
     std::chrono::nanoseconds execute_instance(
+            std::size_t capacity,
             const std::vector<epcpp::Operation<int>> &setup,
             const std::vector<epcpp::Operation<int>> &queries,
             std::size_t num_threads) {
-        Map list(setup.size());
+        Map list(capacity);
 
         auto apply_op = [](auto &list, const auto &op) -> int {
             switch (op.kind) {
@@ -113,7 +114,7 @@ namespace benchmarks {
                 auto[setup, queries] = benchmark.generate(num_elements, num_queries, iteration);
                 for (std::size_t num_threads = 1; num_threads <= max_num_threads; ++num_threads) {
                     auto time = benchmarks::execute_instance<Map>(
-                            setup, queries, num_threads);
+                            setup.size(), setup, queries, num_threads);
                     line.str("");
                     line
                             << "\"" << benchmark_name << "\", "
@@ -160,7 +161,7 @@ namespace benchmarks {
             for (std::size_t iteration = 0; iteration < num_iterations; ++iteration) {
                 auto[setup, queries] = benchmark.generate(num_elements, num_queries, iteration);
                 for (std::size_t num_threads = 1; num_threads <= max_num_threads; ++num_threads) {
-                    auto time = benchmarks::execute_instance<Map>(setup, queries, num_threads);
+                    auto time = benchmarks::execute_instance<Map>(capacity, setup, queries, num_threads);
                     line.str("");
                     line
                             << "\"" << benchmark_name << "\", "
