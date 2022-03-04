@@ -69,7 +69,7 @@ namespace epcpp {
 
             std::shuffle(setup.begin(), setup.end(), gen);
 
-            std::uniform_int_distribution<int> key_dist(num_elements, 2 * num_elements - 1);
+            std::uniform_int_distribution<int> key_dist(num_elements, std::numeric_limits<int>::max());
 
             for (std::size_t i = 0; i < num_queries; ++i) {
                 int key = key_dist(gen);
@@ -105,13 +105,13 @@ namespace epcpp {
 
             std::shuffle(setup.begin(), setup.end(), gen);
 
-            std::uniform_int_distribution<int> key_dist(0, num_elements - 1);
-            std::bernoulli_distribution sucess_dist(successful_find_probability);
+            std::uniform_int_distribution<int> success_key_dist(0, num_elements - 1);
+            std::uniform_int_distribution<int> fail_key_dist(num_elements, std::numeric_limits<int>::max());
+            std::bernoulli_distribution success_dist(successful_find_probability);
 
             for (std::size_t i = 0; i < num_queries; ++i) {
-                int key = key_dist(gen);
-                if (!sucess_dist(gen))
-                    key += num_elements;
+                bool successful_find = !((successful_find_probability == 0.0) || ((successful_find_probability != 1.0) && !success_dist(gen)));
+                int key = successful_find ? success_dist(gen) : fail_key_dist(gen);
                 queries.emplace_back(OperationKind::Find, key);
             }
 
@@ -147,17 +147,22 @@ namespace epcpp {
 
             std::shuffle(setup.begin(), setup.end(), gen);
 
-            std::uniform_int_distribution<int> key_dist(0, num_elements - 1);
+            std::uniform_int_distribution<int> success_key_dist(0, num_elements - 1);
+            std::uniform_int_distribution<int> fail_key_dist(num_elements, std::numeric_limits<int>::max());
             std::bernoulli_distribution success_dist(successful_find_probability);
             std::bernoulli_distribution modification_dist(modification_probability);
 
             for (std::size_t i = 0; i < num_queries; ++i) {
-                int key = key_dist(gen);
-                if ((successful_find_probability == 0.0) || ((successful_find_probability != 1.0) && !success_dist(gen)))
-                    key += num_elements;
+                bool successful_find = !((successful_find_probability == 0.0) || ((successful_find_probability != 1.0) && !success_dist(gen)));
+                int key = successful_find ? success_dist(gen) : fail_key_dist(gen);
                 if (i + 1 < num_queries && ((modification_probability == 1.0) || ((modification_probability != 0.0) && modification_dist(gen)))) {
-                    queries.emplace_back(OperationKind::Erase, key);
-                    queries.emplace_back(OperationKind::Insert, key);
+                    if (successful_find) {
+                        queries.emplace_back(OperationKind::Erase, key);
+                        queries.emplace_back(OperationKind::Insert, key);
+                    } else {
+                        queries.emplace_back(OperationKind::Insert, key);
+                        queries.emplace_back(OperationKind::Erase, key);
+                    }
                     ++i;
                 } else {
                     queries.emplace_back(OperationKind::Find, key);
