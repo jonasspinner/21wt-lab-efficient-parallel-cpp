@@ -39,19 +39,6 @@ namespace epcpp {
     template<class Hash, concepts::Bucket Bucket>
     class HashMap {
     private:
-        struct InnerHash {
-            std::size_t operator()(const typename Bucket::key_type &key) const {
-                auto x = Hash{}(key);
-                // murmurhash3
-                // https://github.com/martinus/robin-hood-hashing/blob/master/src/include/robin_hood.h#L748-L759
-                x ^= x >> 33U;
-                x *= UINT64_C(0xff51afd7ed558ccd);
-                x ^= x >> 33U;
-                //x *= UINT64_C(0xc4ceb9fe1a85ec53);
-                //x ^= x >> 33U;
-                return static_cast<size_t>(x);
-            }
-        };
 
     public:
         using key_type = typename Bucket::key_type;
@@ -67,7 +54,8 @@ namespace epcpp {
 
         HashMap(std::size_t capacity) : HashMap(capacity, allocator_type()) {}
 
-        HashMap(std::size_t capacity, const allocator_type &alloc) : m_allocator(alloc), m_capacity(utils::next_power_of_two(capacity * 1.2)), m_mask(m_capacity - 1) {
+        HashMap(std::size_t capacity, const allocator_type &alloc) : m_allocator(alloc), m_capacity(
+                utils::next_power_of_two(capacity * 1.2)), m_mask(m_capacity - 1) {
             m_buckets = std::allocator<Bucket>{}.allocate(m_capacity);
             for (std::size_t i = 0; i < m_capacity; ++i) {
                 std::construct_at(&m_buckets[i], m_allocator);
@@ -108,25 +96,25 @@ namespace epcpp {
         allocator_type m_allocator;
         std::size_t m_capacity;
         std::size_t m_mask;
-        Bucket* m_buckets;
+        Bucket *m_buckets;
     };
 
 
     template<class Hash, concepts::Bucket Bucket>
     auto HashMap<Hash, Bucket>::insert(value_type &&value) -> std::pair<handle, bool> {
-        auto hash = InnerHash{}(value.first);
+        auto hash = Hash{}(value.first);
         return m_buckets[index(hash)].insert(std::move(value), hash);
     }
 
     template<class Hash, concepts::Bucket Bucket>
     auto HashMap<Hash, Bucket>::find(const key_type &key) -> handle {
-        auto hash = InnerHash{}(key);
+        auto hash = Hash{}(key);
         return m_buckets[index(hash)].find(key, hash);
     }
 
     template<class Hash, concepts::Bucket Bucket>
     bool HashMap<Hash, Bucket>::erase(const key_type &key) {
-        auto hash = InnerHash{}(key);
+        auto hash = Hash{}(key);
         return m_buckets[index(hash)].erase(key, hash);
     }
 

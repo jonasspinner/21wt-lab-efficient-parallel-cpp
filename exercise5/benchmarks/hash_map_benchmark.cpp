@@ -184,16 +184,20 @@ namespace benchmarks {
 int main() {
     using namespace benchmarks;
     using namespace epcpp;
+    using epcpp::utils::MurmurHashWrapper;
     std::size_t log2_max_num_elements = 20;
     std::size_t num_queries = (1 << 20);
     std::size_t max_num_threads = 16;
     std::size_t num_iterations = 10;
 
-    using H01 = HashMap<std::hash<int>, ListBucket<int, int, single_mutex_list, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>, false>>;
-    using H02 = HashMap<std::hash<int>, ListBucket<int, int, node_mutex_list, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>, false>>;
-    using H03 = HashMap<std::hash<int>, ListBucket<int, int, atomic_marked_list, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>, false>>;
-    using H04 = std_hash_map<int, int, std::hash<int>, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>>;
-    using H05 = tbb_hash_map<int, int, std::hash<int>, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>>;
+    // using Hash = MurmurHashWrapper;
+    using Hash = std::hash<int>;
+
+    using H01 = HashMap<Hash, ListBucket<int, int, single_mutex_list, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>, false>>;
+    using H02 = HashMap<Hash, ListBucket<int, int, node_mutex_list, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>, false>>;
+    using H03 = HashMap<Hash, ListBucket<int, int, atomic_marked_list, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>, false>>;
+    using H04 = std_hash_map<int, int, Hash, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>>;
+    using H05 = tbb_hash_map<int, int, Hash, std::equal_to<>, tbb::scalable_allocator<std::pair<const int, int>>>;
 
     execute_benchmark<H01>("../eval/H01_successful_find.csv", successful_find_benchmark(),
                            log2_max_num_elements, num_queries, max_num_threads, num_iterations);

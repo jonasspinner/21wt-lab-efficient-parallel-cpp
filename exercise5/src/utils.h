@@ -76,6 +76,21 @@ namespace epcpp::utils {
             std::shared_ptr<Counts> m_counts;
         };
     }
+
+    struct MurmurHashWrapper {
+        template<class T>
+        std::size_t operator()(const T &value) const {
+            auto x = std::hash<T>{}(value);
+            // murmurhash3
+            // https://github.com/martinus/robin-hood-hashing/blob/master/src/include/robin_hood.h#L748-L759
+            x ^= x >> 33U;
+            x *= UINT64_C(0xff51afd7ed558ccd);
+            x ^= x >> 33U;
+            //x *= UINT64_C(0xc4ceb9fe1a85ec53);
+            //x ^= x >> 33U;
+            return static_cast<size_t>(x);
+        }
+    };
 }
 
 #endif //EXERCISE5_UTILS_H
