@@ -30,21 +30,22 @@ namespace epcpp {
         generate(std::size_t num_elements, std::size_t num_queries, std::size_t seed) {
             std::mt19937_64 gen(seed);
 
+            std::vector<int> keys_in_map(num_elements);
             std::vector<Operation<int>> setup;
             std::vector<Operation<int>> queries;
 
-            for (std::size_t i = 0; i < num_elements; ++i) {
-                int key = i;
+            std::uniform_int_distribution<int> key_dist(0, std::numeric_limits<int>::max());
+            std::uniform_int_distribution<int> index_dist(0, num_elements - 1);
+
+            for (auto &key: keys_in_map) {
+                key = key_dist(gen);
                 setup.emplace_back(OperationKind::Insert, key);
             }
 
             std::shuffle(setup.begin(), setup.end(), gen);
 
-            std::uniform_int_distribution<int> key_dist(0, num_elements - 1);
-
             for (std::size_t i = 0; i < num_queries; ++i) {
-                int key = key_dist(gen);
-                queries.emplace_back(OperationKind::Find, key);
+                queries.emplace_back(OperationKind::Find, keys_in_map[index_dist(gen)]);
             }
 
             return {setup, queries};
@@ -59,21 +60,22 @@ namespace epcpp {
         generate(std::size_t num_elements, std::size_t num_queries, std::size_t seed) {
             std::mt19937_64 gen(seed);
 
+            std::vector<int> keys_in_map(num_elements);
             std::vector<Operation<int>> setup;
             std::vector<Operation<int>> queries;
 
-            for (std::size_t i = 0; i < num_elements; ++i) {
-                int key = i;
+            std::uniform_int_distribution<int> key_dist(0, std::numeric_limits<int>::max());
+            std::uniform_int_distribution<int> query_dist(std::numeric_limits<int>::min(), -1);
+
+            for (auto &key: keys_in_map) {
+                key = key_dist(gen);
                 setup.emplace_back(OperationKind::Insert, key);
             }
 
             std::shuffle(setup.begin(), setup.end(), gen);
 
-            std::uniform_int_distribution<int> key_dist(num_elements, std::numeric_limits<int>::max());
-
             for (std::size_t i = 0; i < num_queries; ++i) {
-                int key = key_dist(gen);
-                queries.emplace_back(OperationKind::Find, key);
+                queries.emplace_back(OperationKind::Find, query_dist(gen));
             }
 
             return {setup, queries};
@@ -95,23 +97,26 @@ namespace epcpp {
         generate(std::size_t num_elements, std::size_t num_queries, std::size_t seed) {
             std::mt19937_64 gen(seed);
 
+            std::vector<int> keys_in_map(num_elements);
             std::vector<Operation<int>> setup;
             std::vector<Operation<int>> queries;
 
-            for (std::size_t i = 0; i < num_elements; ++i) {
-                int key = i;
+            std::uniform_int_distribution<int> key_dist(0, std::numeric_limits<int>::max());
+            std::uniform_int_distribution<int> fail_key_dist(std::numeric_limits<int>::min(), -1);
+            std::uniform_int_distribution<int> index_dist(0, num_elements - 1);
+            std::bernoulli_distribution success_dist(successful_find_probability);
+
+            for (auto &key: keys_in_map) {
+                key = key_dist(gen);
                 setup.emplace_back(OperationKind::Insert, key);
             }
 
             std::shuffle(setup.begin(), setup.end(), gen);
 
-            std::uniform_int_distribution<int> success_key_dist(0, num_elements - 1);
-            std::uniform_int_distribution<int> fail_key_dist(num_elements, std::numeric_limits<int>::max());
-            std::bernoulli_distribution success_dist(successful_find_probability);
-
             for (std::size_t i = 0; i < num_queries; ++i) {
-                bool successful_find = !((successful_find_probability == 0.0) || ((successful_find_probability != 1.0) && !success_dist(gen)));
-                int key = successful_find ? success_dist(gen) : fail_key_dist(gen);
+                bool successful_find = !((successful_find_probability == 0.0) ||
+                                         ((successful_find_probability != 1.0) && !success_dist(gen)));
+                int key = successful_find ? keys_in_map[index_dist(gen)] : fail_key_dist(gen);
                 queries.emplace_back(OperationKind::Find, key);
             }
 
@@ -137,25 +142,29 @@ namespace epcpp {
         generate(std::size_t num_elements, std::size_t num_queries, std::size_t seed) {
             std::mt19937_64 gen(seed);
 
+            std::vector<int> keys_in_map(num_elements);
             std::vector<Operation<int>> setup;
             std::vector<Operation<int>> queries;
 
-            for (std::size_t i = 0; i < num_elements; ++i) {
-                int key = i;
+            std::uniform_int_distribution<int> key_dist(0, std::numeric_limits<int>::max());
+            std::uniform_int_distribution<int> fail_key_dist(std::numeric_limits<int>::min(), -1);
+            std::uniform_int_distribution<int> index_dist(0, num_elements - 1);
+            std::bernoulli_distribution is_success_dist(successful_find_probability);
+            std::bernoulli_distribution is_modification_dist(modification_probability);
+
+            for (auto &key: keys_in_map) {
+                key = key_dist(gen);
                 setup.emplace_back(OperationKind::Insert, key);
             }
 
             std::shuffle(setup.begin(), setup.end(), gen);
 
-            std::uniform_int_distribution<int> success_key_dist(0, num_elements - 1);
-            std::uniform_int_distribution<int> fail_key_dist(num_elements, std::numeric_limits<int>::max());
-            std::bernoulli_distribution success_dist(successful_find_probability);
-            std::bernoulli_distribution modification_dist(modification_probability);
-
             for (std::size_t i = 0; i < num_queries; ++i) {
-                bool successful_find = !((successful_find_probability == 0.0) || ((successful_find_probability != 1.0) && !success_dist(gen)));
-                int key = successful_find ? success_dist(gen) : fail_key_dist(gen);
-                if (i + 1 < num_queries && ((modification_probability == 1.0) || ((modification_probability != 0.0) && modification_dist(gen)))) {
+                bool successful_find = !((successful_find_probability == 0.0) ||
+                                         ((successful_find_probability != 1.0) && !is_success_dist(gen)));
+                int key = successful_find ? keys_in_map[index_dist(gen)] : fail_key_dist(gen);
+                if (i + 1 < num_queries && ((modification_probability == 1.0) ||
+                                            ((modification_probability != 0.0) && is_modification_dist(gen)))) {
                     if (successful_find) {
                         queries.emplace_back(OperationKind::Erase, key);
                         queries.emplace_back(OperationKind::Insert, key);
@@ -189,21 +198,23 @@ namespace epcpp {
         generate(std::size_t num_elements, std::size_t num_queries, std::size_t seed) {
             std::mt19937_64 gen(seed);
 
+            std::vector<int> keys_in_map(num_elements);
             std::vector<Operation<int>> setup;
             std::vector<Operation<int>> queries;
 
-            for (std::size_t i = 0; i < num_elements; ++i) {
-                int key = i;
+            std::geometric_distribution<int> key_dist(geometric_dist_param);
+            std::uniform_int_distribution<int> index_dist(0, num_elements - 1);
+
+            for (auto &key: keys_in_map) {
+                key = key_dist(gen);
                 setup.emplace_back(OperationKind::Insert, key);
             }
 
             std::shuffle(setup.begin(), setup.end(), gen);
 
-            std::geometric_distribution<int> key_dist(geometric_dist_param);
 
             for (std::size_t i = 0; i < num_queries; ++i) {
-                int key = key_dist(gen);
-                queries.emplace_back(OperationKind::Find, key);
+                queries.emplace_back(OperationKind::Find, keys_in_map[index_dist(gen)]);
             }
 
             return {setup, queries};
