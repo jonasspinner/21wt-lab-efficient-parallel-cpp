@@ -29,6 +29,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(oneTBB)
 
+find_package(benchmark)
 
 #find_package(benchmark REQUIRED)
 #find_package(Threads REQUIRED)
@@ -83,3 +84,8 @@ target_link_libraries(hash_map_benchmark TBB::tbb TBB::tbbmalloc)
 
 add_executable(bloom_filter_benchmark benchmarks/bloom_filter_benchmark.cpp)
 target_link_libraries(bloom_filter_benchmark TBB::tbb TBB::tbbmalloc)
+
+if(benchmark_FOUND)
+    add_executable(hash_map_microbenchmark benchmarks/hash_map_microbenchmark.cpp)
+    target_link_libraries(hash_map_microbenchmark TBB::tbb TBB::tbbmalloc benchmark::benchmark)
+endif()
