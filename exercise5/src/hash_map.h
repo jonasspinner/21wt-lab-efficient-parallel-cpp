@@ -90,6 +90,18 @@ namespace epcpp {
             return ss.str();
         }
 
+        void clear() {
+            for (std::size_t i = 0; i < m_capacity; ++i) {
+                m_buckets[i].clear();
+            }
+            for (std::size_t i = 0; i < m_capacity; ++i) {
+                std::destroy_at(&m_buckets[i]);
+            }
+            for (std::size_t i = 0; i < m_capacity; ++i) {
+                std::construct_at(&m_buckets[i], m_allocator);
+            }
+        }
+
     private:
         std::size_t index(std::size_t hash) const { return hash & m_mask; }
 

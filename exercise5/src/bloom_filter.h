@@ -78,6 +78,18 @@ namespace epcpp {
 
         const_handle end() const { return m_bucket.end(); }
 
+        [[nodiscard]] bool empty() const {
+            return m_bucket.empty();
+        }
+
+        [[nodiscard]] std::size_t size() const {
+            return m_bucket.size();
+        }
+
+        void clear() {
+            m_bucket.clear();
+        }
+
         static std::string name() {
             std::stringstream ss;
             ss << "BloomFilter<" << BucketBase::name() << " " << NumFilters << ">";

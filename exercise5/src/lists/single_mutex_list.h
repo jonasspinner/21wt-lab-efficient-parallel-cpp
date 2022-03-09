@@ -67,6 +67,11 @@ namespace epcpp {
             return n;
         }
 
+        void clear() {
+            std::unique_lock lock(m_mutex);
+            m_head = nullptr;
+        }
+
         [[nodiscard]] constexpr static std::string_view name() { return "single_mutex_list"; }
 
     private:

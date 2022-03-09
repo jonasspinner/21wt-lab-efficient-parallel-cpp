@@ -75,6 +75,19 @@ namespace epcpp {
             return n;
         }
 
+        /**
+         * UNSAFE: Deallocates all nodes.
+         */
+        void clear() {
+            auto node = m_head.exchange(marked_ptr<Node<T>>{nullptr});
+            for (; node;) {
+                auto next = node->next.load(std::memory_order_relaxed);
+                m_node_manager.destroy_node(node.get_unmarked());
+                node = next;
+            }
+            m_node_manager = node_manager{};
+        }
+
         [[nodiscard]] constexpr static std::string_view name() { return "atomic_marked_list"; }
 
     private:
@@ -206,10 +219,10 @@ namespace epcpp {
 
     template<class T, class Allocator>
     atomic_marked_list<T, Allocator>::~atomic_marked_list() {
-        for (auto n = m_head.load(std::memory_order_relaxed); n;) {
-            auto next = n->next.load(std::memory_order_relaxed);
-            m_node_manager.destroy_node(n.get_unmarked());
-            n = next;
+        for (auto node = m_head.load(std::memory_order_relaxed); node;) {
+            auto next = node->next.load(std::memory_order_relaxed);
+            m_node_manager.destroy_node(node.get_unmarked());
+            node = next;
         }
     }
 

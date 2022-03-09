@@ -108,6 +108,10 @@ namespace epcpp {
             return m_inner_list.size();
         }
 
+        void clear() {
+            m_inner_list.clear();
+        }
+
         static std::string name() {
             std::stringstream ss;
             ss << InnerList::name();

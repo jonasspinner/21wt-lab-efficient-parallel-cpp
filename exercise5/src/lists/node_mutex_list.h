@@ -90,6 +90,11 @@ namespace epcpp {
             return n;
         }
 
+        void clear() {
+            std::unique_lock lock(m_head_mutex);
+            m_head = nullptr;
+        }
+
         [[nodiscard]] constexpr static std::string_view name() { return "node_mutex_list"; }
 
     private:

@@ -52,6 +52,10 @@ namespace epcpp {
             return "std::unordered_map";
         }
 
+        void clear() {
+            m_inner_map.clear();
+        }
+
     private:
         mutable std::shared_mutex m_mutex;
         InnerMap m_inner_map;
@@ -87,7 +91,7 @@ namespace epcpp {
             return m_inner_map.find(key);
         }
 
-        bool erase(const key_type &key) {
+        bool erase([[maybe_unused]] const key_type &key) {
             throw std::runtime_error("erase not implemented");
             // return m_inner_map.erase(key);
             return false;
@@ -97,6 +101,10 @@ namespace epcpp {
 
         static std::string_view name() {
             return "tbb::concurrent_unordered_map";
+        }
+
+        void clear() {
+            m_inner_map.clear();
         }
 
     private:
